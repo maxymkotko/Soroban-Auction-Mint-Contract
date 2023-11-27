@@ -8,23 +8,108 @@
 
 #![no_std]
 
-mod auctions;
-mod storage;
+mod auctions; // Auction behaviors and mechanisms.
+mod storage; // Contract data storage.
 
+use crate::auctions::{behavior::BaseAuction, behavior::Dispatcher};
 use soroban_sdk::{contract, contractimpl, contractmeta, vec, Address, Env, Vec};
 use storage::*;
-use crate::auctions::{behavior::BaseAuction, behavior::Dispatcher};
 
 contractmeta!(
     key="desc",
     val="Auction smart contract for the Litemint marketplace, implementing timed auctions with support for both ascending and descending price mechanisms.");
 
+pub trait AuctionContractTrait {
+    // Retrieves auction data, if it exists.
+    // No authorization required.
+    fn get_auction(env: Env, seller: Address) -> Option<AuctionData>;
+
+    // Resolves the auction, applying defined auction behavior and rules.
+    // No authorization required.
+    fn resolve(env: Env, seller: Address);
+
+    // Places a bid on an auction.
+    // Late bids (within anti_snipe_time from the end of the auction)
+    // are subject to anti-snipe rules and cannot be cancelled or modified.
+    // Buyer authorization required.
+    fn place_bid(env: Env, seller: Address, buyer: Address, amount: i128);
+
+    // Extends the duration of an ongoing auction.
+    // Seller authorization required.
+    fn extend(env: Env, seller: Address, duration: u64);
+
+    // One off. Initializes the contract settings post-deployment.
+    // Admin authorization required.
+    fn initialize(env: Env, admin: Address, anti_snipe_time: u64, commission_rate: i128);
+
+    // Starts a new auction.
+    // Behaves as descending price auction if both discount_percent and discount_frequency have non-zero values.
+    // The auction can be instantly won if a bidder meets or exceeds the ask_price,
+    // provided it is set above the reserve price or discounted below the bid amount (for descending auctions).
+    // Seller authorization required.
+    fn start(env: Env, seller: Address, token: Address, amount: i128, duration: u64,
+        market: Address, reserve_price: i128, ask_price: i128, discount_percent: u32, discount_frequency: u64, compounded_discount: bool,
+    );
+
+    // Notes: The Litemint marketplace implements an indirection mechanism for
+    // auction seller accounts. Learn more: https://blog.litemint.com/anatomy-of-a-stellar-powered-auction-on-litemint/
+}
+
 #[contract]
-pub struct AuctionContract;
+struct AuctionContract;
 
 #[contractimpl]
-impl AuctionContract {
-    pub fn start(
+impl AuctionContractTrait for AuctionContract {
+    fn get_auction(env: Env, seller: Address) -> Option<AuctionData> {
+        if has_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone())) {
+            Some(load_data::<AuctionData>(
+                &env,
+                &DataKey::AuctionData(seller.clone()),
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn resolve(env: Env, seller: Address) {
+        let auction_data: AuctionData = load_data(&env, &DataKey::AuctionData(seller.clone()));
+        dispatcher!(auction_data.discount_percent > 0 && auction_data.discount_frequency > 0)
+            .resolve(&env, &seller);
+    }
+
+    fn place_bid(env: Env, seller: Address, buyer: Address, amount: i128) {
+        buyer.require_auth();
+
+        let auction_data: AuctionData = load_data(&env, &DataKey::AuctionData(seller.clone()));
+        dispatcher!(auction_data.discount_percent > 0 && auction_data.discount_frequency > 0)
+            .manage_bid(&env, &seller, &buyer, amount);
+    }
+
+    fn extend(env: Env, seller: Address, duration: u64) {
+        seller.require_auth();
+
+        let mut auction_data: AuctionData = load_data(&env, &DataKey::AuctionData(seller.clone()));
+        auction_data.duration += duration;
+        save_data(&env, &DataKey::AuctionData(seller.clone()), &auction_data);
+    }
+
+    fn initialize(env: Env, admin: Address, anti_snipe_time: u64, commission_rate: i128) {
+        if has_data::<AdminData>(&env, &DataKey::AdminData) {
+            panic!("Admin already set.");
+        }
+
+        save_data::<AdminData>(
+            &env,
+            &DataKey::AdminData,
+            &AdminData {
+                admin,
+                anti_snipe_time: anti_snipe_time.min(60),
+                commission_rate: commission_rate.max(0).min(100),
+            },
+        );
+    }
+
+    fn start(
         env: Env,
         seller: Address,
         token: Address,
@@ -62,49 +147,6 @@ impl AuctionContract {
                 bids,
             },
         )
-    }
-
-    pub fn resolve(env: Env, seller: Address) {
-        let auction_data: AuctionData = load_data(&env, &DataKey::AuctionData(seller.clone()));
-        dispatcher!(auction_data.discount_percent > 0 && auction_data.discount_frequency > 0)
-            .resolve(&env, &seller);
-    }
-
-    pub fn extend(env: Env, seller: Address, duration: u64) {
-        seller.require_auth();
-
-        let mut auction_data: AuctionData = load_data(&env, &DataKey::AuctionData(seller.clone()));
-        auction_data.duration += duration;
-        save_data(&env, &DataKey::AuctionData(seller.clone()), &auction_data);
-    }
-
-    pub fn place_bid(env: Env, seller: Address, buyer: Address, amount: i128) {
-        buyer.require_auth();
-
-        let auction_data: AuctionData = load_data(&env, &DataKey::AuctionData(seller.clone()));
-        dispatcher!(auction_data.discount_percent > 0 && auction_data.discount_frequency > 0)
-            .manage_bid(&env, &seller, &buyer, amount);
-    }
-
-    pub fn initialize(env: Env, admin: Address, anti_snipe_time: u64, commission_rate: i128) {
-        if has_data::<AdminData>(&env, &DataKey::AdminData)  {
-            panic!("Admin already set.");
-        }
-
-        save_data::<AdminData>(&env, &DataKey::AdminData, &AdminData {
-            admin,
-            anti_snipe_time: anti_snipe_time.min(60),
-            commission_rate: commission_rate.max(0).min(100),
-        });
-    }
-
-    pub fn get_auction(env: Env, seller: Address) -> Option<AuctionData> {
-        if has_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone())) {
-            Some(load_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone())))
-        }
-        else {
-            None
-        }        
     }
 }
 
