@@ -36,11 +36,11 @@ pub trait AuctionContractTrait {
 
     // Extends the duration of an ongoing auction.
     // Seller authorization required.
-    fn extend(env: Env, seller: Address, duration: u64);
+    fn extend(env: Env, seller: Address, duration: u64) -> bool;
 
     // One off. Initializes the contract settings post-deployment.
     // Admin authorization required.
-    fn initialize(env: Env, admin: Address, anti_snipe_time: u64, commission_rate: i128);
+    fn initialize(env: Env, admin: Address, anti_snipe_time: u64, commission_rate: i128, extendable_auctions: bool);
 
     // Starts a new auction.
     // Behaves as descending price auction if both discount_percent and discount_frequency have non-zero values.
@@ -85,15 +85,21 @@ impl AuctionContractTrait for AuctionContract {
             .manage_bid(&env, &seller, &buyer, amount);
     }
 
-    fn extend(env: Env, seller: Address, duration: u64) {
+    fn extend(env: Env, seller: Address, duration: u64) -> bool {
         seller.require_auth();
 
-        let mut auction_data = load_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone()));
-        auction_data.duration += duration;
-        save_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone()), &auction_data);
+        if !load_data::<AdminData>(&env, &DataKey::AdminData).extendable_auctions {
+            false
+        }
+        else {
+            let mut auction_data = load_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone()));
+            auction_data.duration += duration;
+            save_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone()), &auction_data);
+            true
+        }  
     }
 
-    fn initialize(env: Env, admin: Address, anti_snipe_time: u64, commission_rate: i128) {
+    fn initialize(env: Env, admin: Address, anti_snipe_time: u64, commission_rate: i128, extendable_auctions: bool) {
         if has_data::<AdminData>(&env, &DataKey::AdminData) {
             panic!("Admin already set.");
         }
@@ -105,6 +111,7 @@ impl AuctionContractTrait for AuctionContract {
                 admin,
                 anti_snipe_time: anti_snipe_time.min(60),
                 commission_rate: commission_rate.max(0).min(100),
+                extendable_auctions
             },
         );
     }

@@ -98,7 +98,7 @@ pub trait BaseAuction {
         match winner {
             Some(bid) => {
                 // We have a winner, transfer token to parties.
-                let admin_data  = load_data::<AdminData>(&env, &DataKey::AdminData);
+                let admin_data = load_data::<AdminData>(&env, &DataKey::AdminData);
                 let token = token::Client::new(&env, &auction_data.token);
                 let market = token::Client::new(&env, &auction_data.market);
                 let admin: Address = admin_data.admin;

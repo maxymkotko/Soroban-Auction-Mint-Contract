@@ -50,6 +50,7 @@ fn test_all() {
     let initial_balance = 1000;
     let commission_rate = 10;
     let token_supply:i128 = 5;
+    let extendable_auctions = true;
     let token_admin = Address::random(&env);
     let seller = Address::random(&env);
     let (token, token_admin_client) = create_token_contract(&env, &token_admin);
@@ -68,7 +69,7 @@ fn test_all() {
 
     // Initialize the contract. Sets the admin, anti_snipe_time (in seconds)
     // and commission_rate (in percent).
-    auction_contract.initialize(&token_admin, &300, &commission_rate);
+    auction_contract.initialize(&token_admin, &300, &commission_rate, &extendable_auctions);
 
     // No auction found should return None.
     assert_eq!(auction_contract.get_auction(&seller), None);
@@ -259,6 +260,7 @@ fn test_anti_sniping() {
     let duration = 50;
     let initial_balance = 1000;
     let commission_rate = 10;
+    let extendable_auctions = true;
     let token_supply:i128 = 5;
     let token_admin = Address::random(&env);
     let seller = Address::random(&env);
@@ -278,7 +280,7 @@ fn test_anti_sniping() {
 
     // Initialize the contract. Sets the admin, anti_snipe_time (in seconds)
     // and commission_rate (in percent).
-    auction_contract.initialize(&token_admin, &duration, &commission_rate);
+    auction_contract.initialize(&token_admin, &duration, &commission_rate, &extendable_auctions);
 
     // No auction found should return None.
     assert_eq!(auction_contract.get_auction(&seller), None);

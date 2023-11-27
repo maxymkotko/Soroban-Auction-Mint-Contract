@@ -14,7 +14,7 @@ pub struct AscendingPriceAuction;
 // AscendingPriceAuction (aka English Auction).
 impl super::behavior::BaseAuction for AscendingPriceAuction {
     fn resolve(&self, env: &Env, seller: &Address) -> bool {
-        let auction_data= load_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()));
+        let auction_data = load_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()));
 
         // Retrieve the highest bid.
         if let Some(bid) = auction_data.bids.iter().max_by_key(|bid| bid.amount) {

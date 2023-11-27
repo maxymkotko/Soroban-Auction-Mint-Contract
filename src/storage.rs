@@ -93,6 +93,7 @@ pub struct AdminData {
     pub admin: Address,
     pub anti_snipe_time: u64,
     pub commission_rate: i128,
+    pub extendable_auctions: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
