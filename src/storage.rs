@@ -6,14 +6,76 @@
     MIT License
 */
 
-use soroban_sdk::{contracttype, Address, Env, Vec};
+use soroban_sdk::{contracttype, storage::{Instance, Persistent}, Address, Env, Vec};
+
+fn with_instance_storage<F, T>(env: &Env, f: F) -> T
+where
+    F: FnOnce(&Instance) -> T,
+{
+    let storage = env.storage().instance();
+    f(&storage)
+}
+
+fn _with_persistent_storage<F, T>(env: &Env, f: F) -> T
+where
+    F: FnOnce(&Persistent) -> T,
+{
+    let storage = env.storage().persistent();
+    f(&storage)
+}
+
+macro_rules! impl_storage_data {
+    ($type:ty, $storage_func:expr) => {
+        impl StorageData for $type {
+            fn save(&self, env: &Env, key: &DataKey) {
+                $storage_func(env, |storage| storage.set(key, self));
+            }
+
+            fn load(env: &Env, key: &DataKey) -> Self {
+                $storage_func(env, |storage| storage.get(key).unwrap())
+            }
+
+            fn delete(env: &Env, key: &DataKey) {
+                $storage_func(env, |storage| storage.remove(key));
+            }
+
+            fn has(env: &Env, key: &DataKey) -> bool {
+                $storage_func(env, |storage| storage.has(key))
+            }
+        }
+    };
+}
+
+impl_storage_data!(AdminData, with_instance_storage);
+impl_storage_data!(AuctionData, with_instance_storage);
+
+pub fn load_data<T: StorageData>(env: &Env, key: &DataKey) -> T {
+    T::load(env, key)
+}
+
+pub fn has_data<T: StorageData>(env: &Env, key: &DataKey) -> bool {
+    T::has(env, key)
+}
+
+pub fn delete_data<T: StorageData>(env: &Env, key: &DataKey) {
+    T::delete(env, key)
+}
+
+pub fn save_data<T: StorageData>(env: &Env, key: &DataKey, data: &T) {
+    data.save(env, key)
+}
+
+pub trait StorageData {
+    fn save(&self, env: &Env, key: &DataKey);
+    fn load(env: &Env, key: &DataKey) -> Self where Self: Sized;
+    fn delete(env: &Env, key: &DataKey);
+    fn has(env: &Env, key: &DataKey) -> bool;
+}
 
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    Admin,
-    CommissionRate,
-    AntiSnipeTime,
+    AdminData,
     AuctionData(Address),
 }
 
@@ -23,6 +85,14 @@ pub struct BidData {
     pub buyer: Address,
     pub amount: i128,
     pub sniper: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminData {
+    pub admin: Address,
+    pub anti_snipe_time: u64,
+    pub commission_rate: i128,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -39,67 +109,4 @@ pub struct AuctionData {
     pub discount_frequency: u64,
     pub compounded_discount: bool,
     pub bids: Vec<BidData>,
-}
-
-pub fn save_auction_data(env: &Env, seller: &Address, auction_data: &AuctionData) {
-    env.storage()
-        .instance()
-        .set(&DataKey::AuctionData(seller.clone()), auction_data);
-}
-
-pub fn load_auction_data(env: &Env, seller: &Address) -> AuctionData {
-    env.storage()
-        .instance()
-        .get(&DataKey::AuctionData(seller.clone()))
-        .unwrap()
-}
-
-pub fn delete_auction_data(env: &Env, seller: &Address) {
-    env.storage()
-        .instance()
-        .remove(&DataKey::AuctionData(seller.clone()))
-}
-
-pub fn has_auction_data(env: &Env, seller: &Address) -> bool {
-    env.storage()
-        .instance()
-        .has(&DataKey::AuctionData(seller.clone()))
-}
-
-pub fn save_admin(env: &Env, admin: &Address) {
-    env.storage().instance().set(&DataKey::Admin, &admin);
-}
-
-pub fn load_admin(env: &Env) -> Address {
-    env.storage().instance().get(&DataKey::Admin).unwrap()
-}
-
-pub fn has_admin(env: &Env) -> bool {
-    env.storage().instance().has(&DataKey::Admin)
-}
-
-pub fn save_anti_snipe_time(env: &Env, anti_snipe_time: u64) {
-    env.storage()
-        .instance()
-        .set(&DataKey::AntiSnipeTime, &anti_snipe_time);
-}
-
-pub fn load_anti_snipe_time(env: &Env) -> u64 {
-    env.storage()
-        .instance()
-        .get(&DataKey::AntiSnipeTime)
-        .unwrap_or(0)
-}
-
-pub fn save_commission_rate(env: &Env, commission_rate: i128) {
-    env.storage()
-        .instance()
-        .set(&DataKey::CommissionRate, &commission_rate);
-}
-
-pub fn load_commission_rate(env: &Env) -> i128 {
-    env.storage()
-        .instance()
-        .get(&DataKey::CommissionRate)
-        .unwrap_or(0)
 }

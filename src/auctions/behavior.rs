@@ -18,7 +18,7 @@ const BID: Symbol = symbol_short!("BID");
 
 pub trait BaseAuction {
     fn start(&self, env: &Env, seller: &Address, auction_data: &AuctionData) {
-        if has_auction_data(&env, &seller) {
+        if has_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone())) {
             panic!("Auction already running.");
         }
 
@@ -33,7 +33,7 @@ pub trait BaseAuction {
             &env.current_contract_address(),
             &auction_data.amount,
         );
-        save_auction_data(env, seller, auction_data);
+        save_data(env, &DataKey::AuctionData(seller.clone()), auction_data);
         env.events()
             .publish((AUCTION, symbol_short!("started")), seller);
     }
@@ -45,7 +45,7 @@ pub trait BaseAuction {
             return;
         }
 
-        let mut auction_data = load_auction_data(env, seller);
+        let mut auction_data: AuctionData = load_data(env, &DataKey::AuctionData(seller.clone()));
         let market = token::Client::new(&env, &auction_data.market);
 
         if amount == 0 {
@@ -71,7 +71,7 @@ pub trait BaseAuction {
                 market.transfer(&buyer, &env.current_contract_address(), &amount);
 
                 let mut sniper = false;
-                let anti_snipe_time = load_anti_snipe_time(&env);
+                let anti_snipe_time = load_data::<AdminData>(&env, &DataKey::AdminData).anti_snipe_time;
                 if env.ledger().timestamp()
                     >= auction_data.start_time + auction_data.duration - anti_snipe_time
                 {
@@ -92,19 +92,20 @@ pub trait BaseAuction {
             panic!("Invalid bid amount.");
         }
 
-        save_auction_data(env, seller, &auction_data);
+        save_data(env, &DataKey::AuctionData(seller.clone()), &auction_data);
         self.resolve(env, seller);
     }
 
     fn finalize(&self, env: &Env, seller: &Address, winner: Option<&mut BidData>) -> bool {
-        let auction_data = load_auction_data(env, seller);
+        let auction_data: AuctionData = load_data(env, &DataKey::AuctionData(seller.clone()));
         match winner {
             Some(bid) => {
                 // We have a winner, transfer token to parties.
+                let admin_data: AdminData = load_data(&env, &DataKey::AdminData);
                 let token = token::Client::new(&env, &auction_data.token);
                 let market = token::Client::new(&env, &auction_data.market);
-                let admin: Address = load_admin(&env);
-                let commission_rate: i128 = load_commission_rate(&env);
+                let admin: Address = admin_data.admin;
+                let commission_rate: i128 = admin_data.commission_rate;
                 let admin_share = bid.amount * commission_rate / 100;
                 let seller_share = bid.amount - admin_share;
 
@@ -121,7 +122,7 @@ pub trait BaseAuction {
                 }
 
                 // Delete the auction.
-                delete_auction_data(env, seller);
+                delete_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()));
                 env.events()
                     .publish((AUCTION, symbol_short!("won")), seller);
                 true
@@ -145,7 +146,7 @@ pub trait BaseAuction {
                 }
 
                 // Delete the auction.
-                delete_auction_data(env, seller);
+                delete_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()));
                 env.events()
                     .publish((AUCTION, symbol_short!("ended")), seller);
                 true

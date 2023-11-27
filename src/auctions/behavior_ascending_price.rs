@@ -14,7 +14,7 @@ pub struct AscendingPriceAuction;
 // AscendingPriceAuction (aka English Auction).
 impl super::behavior::BaseAuction for AscendingPriceAuction {
     fn resolve(&self, env: &Env, seller: &Address) -> bool {
-        let auction_data = load_auction_data(env, seller);
+        let auction_data: AuctionData = load_data(env, &DataKey::AuctionData(seller.clone()));
 
         // Retrieve the highest bid.
         if let Some(mut bid) = auction_data.bids.iter().max_by_key(|bid| bid.amount) {
@@ -37,7 +37,7 @@ impl super::behavior::BaseAuction for AscendingPriceAuction {
     }
 
     fn calculate_price(&self, env: &Env, seller: &Address) -> i128 {
-        load_auction_data(env, seller).reserve_price
+        load_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone())).reserve_price
     }
 }
 

@@ -37,7 +37,7 @@ impl AuctionContract {
         discount_frequency: u64,
         compounded_discount: bool,
     ) {
-        if !has_admin(&env) {
+        if !has_data::<AdminData>(&env, &DataKey::AdminData) {
             panic!("Admin not set. Call initialize.");
         }
 
@@ -65,7 +65,7 @@ impl AuctionContract {
     }
 
     pub fn resolve(env: Env, seller: Address) {
-        let auction_data = load_auction_data(&env, &seller);
+        let auction_data: AuctionData = load_data(&env, &DataKey::AuctionData(seller.clone()));
         dispatcher!(auction_data.discount_percent > 0 && auction_data.discount_frequency > 0)
             .resolve(&env, &seller);
     }
@@ -73,32 +73,34 @@ impl AuctionContract {
     pub fn extend(env: Env, seller: Address, duration: u64) {
         seller.require_auth();
 
-        let mut auction_data = load_auction_data(&env, &seller);
+        let mut auction_data: AuctionData = load_data(&env, &DataKey::AuctionData(seller.clone()));
         auction_data.duration += duration;
-        save_auction_data(&env, &seller, &auction_data);
+        save_data(&env, &DataKey::AuctionData(seller.clone()), &auction_data);
     }
 
     pub fn place_bid(env: Env, seller: Address, buyer: Address, amount: i128) {
         buyer.require_auth();
 
-        let auction_data = load_auction_data(&env, &seller);
+        let auction_data: AuctionData = load_data(&env, &DataKey::AuctionData(seller.clone()));
         dispatcher!(auction_data.discount_percent > 0 && auction_data.discount_frequency > 0)
             .manage_bid(&env, &seller, &buyer, amount);
     }
 
     pub fn initialize(env: Env, admin: Address, anti_snipe_time: u64, commission_rate: i128) {
-        if has_admin(&env) {
+        if has_data::<AdminData>(&env, &DataKey::AdminData)  {
             panic!("Admin already set.");
         }
 
-        save_admin(&env, &admin);
-        save_anti_snipe_time(&env, anti_snipe_time.min(60));
-        save_commission_rate(&env, commission_rate.max(0).min(100));
+        save_data::<AdminData>(&env, &DataKey::AdminData, &AdminData {
+            admin,
+            anti_snipe_time: anti_snipe_time.min(60),
+            commission_rate: commission_rate.max(0).min(100),
+        });
     }
 
     pub fn get_auction(env: Env, seller: Address) -> Option<AuctionData> {
-        if has_auction_data(&env, &seller) {
-            Some(load_auction_data(&env, &seller))
+        if has_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone())) {
+            Some(load_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone())))
         }
         else {
             None
