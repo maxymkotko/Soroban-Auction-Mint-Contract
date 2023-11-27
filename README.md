@@ -15,7 +15,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About Litemint Auction Contract
 
-Since 2021, the Litemint marketplace has utilized the Stellar DEX for time-based auctions, leveraging time-bound, pre-auth transactions [details in our blog](https://blog.litemint.com/anatomy-of-a-stellar-powered-auction-on-litemint/). While these auctions offer security and interoperability, they lack flexibilities, such as anti-snipe mechanisms, varied bidding strategies like descending auctions, "Buy now" for ascending auctions and so on. The Litemint auction contract on Soroban, a Rust-based smart contracts platform [Soroban](https://soroban.stellar.org), addresses these limitations. It enhances the Litemint marketplace while co-existing with our existing SDEX-based implementation, offering users a comprehensive and versatile auction experience.
+Since 2021, the Litemint marketplace has utilized the Stellar DEX for time-based auctions, leveraging time-bound, pre-auth transactions [details in our blog](https://blog.litemint.com/anatomy-of-a-stellar-powered-auction-on-litemint/). While these auctions offer security and interoperability, they lack flexibilities, such as anti-snipe mechanisms, varied bidding strategies like descending auctions, "Buy now" for ascending auctions and so on. The Litemint auction contract, for the Rust-based smart contracts platform [Soroban](https://soroban.stellar.org), addresses these limitations. It enhances the Litemint marketplace while co-existing with our existing SDEX-based implementation, offering users a comprehensive and versatile auction experience.
 
 This contract offers a range of features, including:
 
