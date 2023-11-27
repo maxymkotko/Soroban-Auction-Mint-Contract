@@ -72,7 +72,7 @@ impl AuctionContractTrait for AuctionContract {
     }
 
     fn resolve(env: Env, seller: Address) {
-        let auction_data: AuctionData = load_data(&env, &DataKey::AuctionData(seller.clone()));
+        let auction_data = load_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone()));
         dispatcher!(auction_data.discount_percent > 0 && auction_data.discount_frequency > 0)
             .resolve(&env, &seller);
     }
@@ -80,7 +80,7 @@ impl AuctionContractTrait for AuctionContract {
     fn place_bid(env: Env, seller: Address, buyer: Address, amount: i128) {
         buyer.require_auth();
 
-        let auction_data: AuctionData = load_data(&env, &DataKey::AuctionData(seller.clone()));
+        let auction_data = load_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone()));
         dispatcher!(auction_data.discount_percent > 0 && auction_data.discount_frequency > 0)
             .manage_bid(&env, &seller, &buyer, amount);
     }
@@ -88,9 +88,9 @@ impl AuctionContractTrait for AuctionContract {
     fn extend(env: Env, seller: Address, duration: u64) {
         seller.require_auth();
 
-        let mut auction_data: AuctionData = load_data(&env, &DataKey::AuctionData(seller.clone()));
+        let mut auction_data = load_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone()));
         auction_data.duration += duration;
-        save_data(&env, &DataKey::AuctionData(seller.clone()), &auction_data);
+        save_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone()), &auction_data);
     }
 
     fn initialize(env: Env, admin: Address, anti_snipe_time: u64, commission_rate: i128) {

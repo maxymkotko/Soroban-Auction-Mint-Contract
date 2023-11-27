@@ -14,7 +14,7 @@ pub struct DescendingPriceAuction;
 // DescendingPriceAuction (aka Dutch Auction).
 impl super::behavior::BaseAuction for DescendingPriceAuction {
     fn resolve(&self, env: &Env, seller: &Address) -> bool {
-        let auction_data: AuctionData = load_data(env, &DataKey::AuctionData(seller.clone()));
+        let auction_data = load_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()));
 
         // Auction has expired.
         if auction_data.start_time + auction_data.duration < env.ledger().timestamp() {
@@ -22,10 +22,10 @@ impl super::behavior::BaseAuction for DescendingPriceAuction {
             self.finalize(env, seller, None)
         }
         else {
-            if let Some(mut bid) = auction_data.bids.iter().max_by_key(|bid| bid.amount) {
+            if let Some(bid) = auction_data.bids.iter().max_by_key(|bid| bid.amount) {
                 // Discounted price is met, complete the auction with the winning bid.
                 if bid.amount >= self.calculate_price(env, seller) {
-                    return self.finalize(env, seller, Some(&mut bid));
+                    return self.finalize(env, seller, Some(&bid));
                 }
             }
             false
@@ -33,7 +33,7 @@ impl super::behavior::BaseAuction for DescendingPriceAuction {
     }
 
     fn calculate_price(&self, env: &Env, seller: &Address) -> i128 {
-        let auction_data: AuctionData = load_data(env, &DataKey::AuctionData(seller.clone()));
+        let auction_data = load_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()));
 
         // Sanity checks.
         if auction_data.discount_percent == 0 || auction_data.discount_frequency == 0 {
