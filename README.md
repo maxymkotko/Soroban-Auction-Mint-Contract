@@ -28,6 +28,7 @@ This contract implements a range of features, including:
 - [X] Time-based auctions with decentralized resolution.
 - [X] Descending price auctions (see [behavior_descending_price.rs](https://github.com/FredericRezeau/litemint-auction-contract/blob/main/src/auctions/behavior_descending_price.rs)) supporting linear or compound discount, and customizable frequency/rate.
 - [X] Ascending price auctions (see [behavior_ascending_price.rs](https://github.com/FredericRezeau/litemint-auction-contract/blob/main/src/auctions/behavior_ascending_price.rs)) with "**_buy now_**" option.
+- [X] Support for `reserve price` and `ask price`.
 - [X] Rust Traits-based behavior for easy auction types extension (search impl for `resolve` and `calculate_price` for examples).
 - [X] Anti-snipe mechanism. Auction sniping automatically increases the auction duration (time configurable by admin) and prevents the sniper to either cancel or submit a new bid.
 - [X] Configurable marketplace commission rate.
