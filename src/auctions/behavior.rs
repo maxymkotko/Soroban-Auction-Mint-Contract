@@ -34,6 +34,23 @@ pub trait BaseAuction {
             &auction_data.amount,
         );
         save_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()), auction_data);
+
+        // Bump the storage according to auction duration.
+        // TODO: Thorough testing needed once we can deploy to mainnet.
+        let expiration_watermark = LEDGERS_PER_HOUR + auction_data
+            .duration
+            .checked_add((LEDGERS_PER_MINUTE) - 1)
+            .and_then(|sum| sum.checked_div(LEDGERS_PER_MINUTE))
+            .expect("Invalid auction duration.")
+            .min(LEDGERS_PER_YEAR);
+
+        bump_data::<AuctionData>(
+            env,
+            &DataKey::AuctionData(seller.clone()),
+            expiration_watermark as u32,
+            expiration_watermark as u32,
+        );
+
         env.events()
             .publish((AUCTION, symbol_short!("started")), seller);
     }
@@ -58,7 +75,8 @@ pub trait BaseAuction {
                 let bid = &auction_data.bids.get_unchecked(index as u32);
                 market.transfer(&env.current_contract_address(), &buyer, &bid.amount);
                 auction_data.bids.remove(index as u32);
-                env.events().publish((BID, symbol_short!("deleted")), seller);
+                env.events()
+                    .publish((BID, symbol_short!("deleted")), seller);
             } else {
                 panic!("No bid to cancel.");
             }
@@ -70,8 +88,10 @@ pub trait BaseAuction {
             {
                 market.transfer(&buyer, &env.current_contract_address(), &amount);
 
-                let anti_snipe_time = load_data::<AdminData>(&env, &DataKey::AdminData).anti_snipe_time;
-                let sniper = env.ledger().timestamp() >= auction_data.start_time + auction_data.duration - anti_snipe_time;
+                let anti_snipe_time =
+                    load_data::<AdminData>(&env, &DataKey::AdminData).anti_snipe_time;
+                let sniper = env.ledger().timestamp()
+                    >= auction_data.start_time + auction_data.duration - anti_snipe_time;
                 if sniper {
                     auction_data.duration += anti_snipe_time;
                 }
@@ -106,7 +126,11 @@ pub trait BaseAuction {
                 let admin_share = bid.amount * commission_rate / 100;
                 let seller_share = bid.amount - admin_share;
 
-                token.transfer(&env.current_contract_address(), &bid.buyer, &auction_data.amount);
+                token.transfer(
+                    &env.current_contract_address(),
+                    &bid.buyer,
+                    &auction_data.amount,
+                );
                 market.transfer(&env.current_contract_address(), &admin, &admin_share);
                 market.transfer(&env.current_contract_address(), &seller, &seller_share);
 

@@ -13,7 +13,7 @@ mod storage; // Contract data storage.
 
 use crate::auctions::{behavior::BaseAuction, behavior::Dispatcher};
 use soroban_sdk::{contract, contractimpl, contractmeta, vec, Address, Env, Vec};
-use storage::*;
+use crate::storage::*;
 
 contractmeta!(
     key="desc",

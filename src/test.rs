@@ -6,7 +6,7 @@
     MIT License
 */
 
-use crate::storage::*;
+use super::storage::*;
 use crate::{AuctionContract, AuctionContractClient};
 extern crate std;
 
