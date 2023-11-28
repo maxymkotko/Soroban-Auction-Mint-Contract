@@ -118,20 +118,20 @@ pub fn bump_data<T>(
 ) where
     T: StorageTypeInfo + StorageData,
 {
+    fn seconds_to_ledgers(watermark: u64) -> u64 {
+        watermark
+            .checked_add(ledger_times::LEDGERS_PER_MINUTE - 1)
+            .and_then(|sum| sum.checked_div(ledger_times::LEDGERS_PER_MINUTE))
+            .expect("Invalid duration.")
+            .min(ledger_times::LEDGERS_PER_YEAR)
+    }
+
     let (lo_exp, hi_exp) = if !in_seconds {
         (low_expiration_watermark, hi_expiration_watermark)
     } else {
         (
-            low_expiration_watermark
-                .checked_add((ledger_times::LEDGERS_PER_MINUTE) - 1)
-                .and_then(|sum| sum.checked_div(ledger_times::LEDGERS_PER_MINUTE))
-                .expect("Invalid duration.")
-                .min(ledger_times::LEDGERS_PER_YEAR),
-            hi_expiration_watermark
-                .checked_add((ledger_times::LEDGERS_PER_MINUTE) - 1)
-                .and_then(|sum| sum.checked_div(ledger_times::LEDGERS_PER_MINUTE))
-                .expect("Invalid duration.")
-                .min(ledger_times::LEDGERS_PER_YEAR),
+            seconds_to_ledgers(low_expiration_watermark),
+            seconds_to_ledgers(hi_expiration_watermark),
         )
     };
 
