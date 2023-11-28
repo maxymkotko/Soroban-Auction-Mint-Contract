@@ -65,11 +65,3 @@ pub enum StorageType {
     Persistent,
     Temporary,
 }
-
-mod ledger_times {
-    pub const LEDGERS_PER_MINUTE: u64 = 10; // Assuming 6 seconds average time per ledger.
-    pub const LEDGERS_PER_HOUR: u64 = LEDGERS_PER_MINUTE * 60;
-    pub const LEDGERS_PER_DAY: u64 = LEDGERS_PER_HOUR * 24;
-    pub const LEDGERS_PER_YEAR: u64 = LEDGERS_PER_DAY * 365;
-}
-pub use ledger_times::*;

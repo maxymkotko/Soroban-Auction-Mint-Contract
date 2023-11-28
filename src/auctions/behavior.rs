@@ -35,20 +35,15 @@ pub trait BaseAuction {
         );
         save_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()), auction_data);
 
-        // Bump the storage according to auction duration.
-        // TODO: Thorough testing needed once we can deploy to mainnet.
-        let expiration_watermark = LEDGERS_PER_HOUR + auction_data
-            .duration
-            .checked_add((LEDGERS_PER_MINUTE) - 1)
-            .and_then(|sum| sum.checked_div(LEDGERS_PER_MINUTE))
-            .expect("Invalid auction duration.")
-            .min(LEDGERS_PER_YEAR);
-
+        // Bump the storage according to auction duration,
+        // adding a couple hours to avoid expiration with async resolve.
+        let expiration_buffer: u64 = 7200;
         bump_data::<AuctionData>(
             env,
             &DataKey::AuctionData(seller.clone()),
-            expiration_watermark as u32,
-            expiration_watermark as u32,
+            auction_data.duration + expiration_buffer,
+            auction_data.duration + expiration_buffer,
+            true
         );
 
         env.events()

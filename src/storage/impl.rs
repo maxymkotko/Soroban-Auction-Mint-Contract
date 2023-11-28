@@ -12,19 +12,7 @@ use soroban_sdk::{
     Env,
 };
 
-// Usage Example:
-// 
-// Use the impl_storage! macro to specify the contract storage for the type.
-// impl_storage!(SomeContractType, Persistent);
-// 
-// Manage data using generics:
-// - e.g. load data: load_data::<SomeContractType>(&env, &key);
-// 
-// Or, directly call methods on the instance:
-// - e.g. save data: some_contract_type_instance.save(&env, &key);
-// 
-
-fn with_instance_storage<F, T>(env: &Env, f: F) -> T
+pub fn with_instance_storage<F, T>(env: &Env, f: F) -> T
 where
     F: FnOnce(&Instance) -> T,
 {
@@ -32,7 +20,7 @@ where
     f(&storage)
 }
 
-fn with_persistent_storage<F, T>(env: &Env, f: F) -> T
+pub fn with_persistent_storage<F, T>(env: &Env, f: F) -> T
 where
     F: FnOnce(&Persistent) -> T,
 {
@@ -40,7 +28,7 @@ where
     f(&storage)
 }
 
-fn with_temporary_storage<F, T>(env: &Env, f: F) -> T
+pub fn with_temporary_storage<F, T>(env: &Env, f: F) -> T
 where
     F: FnOnce(&Temporary) -> T,
 {
@@ -113,31 +101,55 @@ pub fn save_data<T: StorageData>(env: &Env, key: &DataKey, data: &T) {
     data.save(env, key)
 }
 
-pub fn bump_data<T>(env: &Env, key: &DataKey, low_exp_watermark: u32, hi_exp_watermark: u32)
-where
+mod ledger_times {
+    // Assuming 6 seconds average time per ledger.
+    pub const LEDGERS_PER_MINUTE: u64 = 10;
+    pub const LEDGERS_PER_HOUR: u64 = LEDGERS_PER_MINUTE * 60;
+    pub const LEDGERS_PER_DAY: u64 = LEDGERS_PER_HOUR * 24;
+    pub const LEDGERS_PER_YEAR: u64 = LEDGERS_PER_DAY * 365;
+}
+
+pub fn bump_data<T>(
+    env: &Env,
+    key: &DataKey,
+    low_expiration_watermark: u64,
+    hi_expiration_watermark: u64,
+    in_seconds: bool,
+) where
     T: StorageTypeInfo + StorageData,
 {
+    let (lo_exp, hi_exp) = if !in_seconds {
+        (low_expiration_watermark, hi_expiration_watermark)
+    } else {
+        (
+            low_expiration_watermark
+                .checked_add((ledger_times::LEDGERS_PER_MINUTE) - 1)
+                .and_then(|sum| sum.checked_div(ledger_times::LEDGERS_PER_MINUTE))
+                .expect("Invalid duration.")
+                .min(ledger_times::LEDGERS_PER_YEAR),
+            hi_expiration_watermark
+                .checked_add((ledger_times::LEDGERS_PER_MINUTE) - 1)
+                .and_then(|sum| sum.checked_div(ledger_times::LEDGERS_PER_MINUTE))
+                .expect("Invalid duration.")
+                .min(ledger_times::LEDGERS_PER_YEAR),
+        )
+    };
+
     match T::get_storage_type() {
         StorageType::Instance => {
             with_instance_storage(env, |storage| {
-                storage.bump(low_exp_watermark, hi_exp_watermark);
+                storage.bump(lo_exp as u32, hi_exp as u32);
             });
         }
         StorageType::Persistent => {
             with_persistent_storage(env, |storage| {
-                storage.bump(key, low_exp_watermark, hi_exp_watermark);
+                storage.bump(key, lo_exp as u32, hi_exp as u32);
             });
         }
         StorageType::Temporary => {
             with_temporary_storage(env, |storage| {
-                storage.bump(key, low_exp_watermark, hi_exp_watermark);
+                storage.bump(key, lo_exp as u32, hi_exp as u32);
             });
         }
     }
 }
-
-// Implement AdminData with Instance storage.
-impl_storage!(AdminData, Instance);
-
-// Implement AuctionData with Persistent storage.
-impl_storage!(AuctionData, Persistent);
