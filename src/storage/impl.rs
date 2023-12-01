@@ -16,24 +16,21 @@ pub fn with_instance_storage<F, T>(env: &Env, f: F) -> T
 where
     F: FnOnce(&Instance) -> T,
 {
-    let storage = env.storage().instance();
-    f(&storage)
+    f(&env.storage().instance())
 }
 
 pub fn with_persistent_storage<F, T>(env: &Env, f: F) -> T
 where
     F: FnOnce(&Persistent) -> T,
 {
-    let storage = env.storage().persistent();
-    f(&storage)
+    f(&env.storage().persistent())
 }
 
 pub fn with_temporary_storage<F, T>(env: &Env, f: F) -> T
 where
     F: FnOnce(&Temporary) -> T,
 {
-    let storage = env.storage().temporary();
-    f(&storage)
+    f(&env.storage().temporary())
 }
 
 macro_rules! impl_storage_data {
@@ -152,4 +149,24 @@ pub fn bump_data<T>(
             });
         }
     }
+}
+
+pub trait StorageData {
+    fn save(&self, env: &Env, key: &DataKey);
+    fn load(env: &Env, key: &DataKey) -> Self
+    where
+        Self: Sized;
+    fn delete(env: &Env, key: &DataKey);
+    fn has(env: &Env, key: &DataKey) -> bool;
+}
+
+pub trait StorageTypeInfo {
+    fn get_storage_type() -> StorageType;
+}
+
+#[allow(dead_code)]
+pub enum StorageType {
+    Instance,
+    Persistent,
+    Temporary,
 }

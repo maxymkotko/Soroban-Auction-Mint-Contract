@@ -6,18 +6,7 @@
     MIT License
 */
 
-use soroban_sdk::{contracttype, Address, Env, Vec};
-
-pub trait StorageData {
-    fn save(&self, env: &Env, key: &DataKey);
-    fn load(env: &Env, key: &DataKey) -> Self where Self: Sized;
-    fn delete(env: &Env, key: &DataKey);
-    fn has(env: &Env, key: &DataKey) -> bool;
-}
-
-pub trait StorageTypeInfo {
-    fn get_storage_type() -> StorageType;
-}
+use soroban_sdk::{contracttype, Address, Vec};
 
 #[derive(Clone)]
 #[contracttype]
@@ -57,11 +46,4 @@ pub struct AuctionData {
     pub discount_frequency: u64,
     pub compounded_discount: bool,
     pub bids: Vec<BidData>,
-}
-
-#[allow(dead_code)]
-pub enum StorageType {
-    Instance,
-    Persistent,
-    Temporary,
 }
