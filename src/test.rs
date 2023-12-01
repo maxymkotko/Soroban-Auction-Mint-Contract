@@ -6,8 +6,7 @@
     MIT License
 */
 
-use super::storage::*;
-use crate::{AuctionContract, AuctionContractClient};
+use crate::{AuctionContract, AuctionContractClient, types::AuctionData};
 extern crate std;
 
 use core::panic::AssertUnwindSafe;

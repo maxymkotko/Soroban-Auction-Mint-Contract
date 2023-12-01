@@ -8,6 +8,8 @@
 
 use soroban_sdk::{contracttype, Address, Vec};
 
+use crate::impl_storage;
+
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -32,6 +34,9 @@ pub struct AdminData {
     pub extendable_auctions: bool,
 }
 
+// Implement AdminData with Instance storage.
+impl_storage!(AdminData, Instance);
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct AuctionData {
@@ -47,3 +52,6 @@ pub struct AuctionData {
     pub compounded_discount: bool,
     pub bids: Vec<BidData>,
 }
+
+// Implement AuctionData with Persistent storage.
+impl_storage!(AuctionData, Persistent);

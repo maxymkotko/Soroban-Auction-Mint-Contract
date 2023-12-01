@@ -6,11 +6,33 @@
     MIT License
 */
 
-pub use super::types::*;
 use soroban_sdk::{
     storage::{Instance, Persistent, Temporary},
-    Env,
+    Env, Val, IntoVal, TryFromVal,
 };
+
+pub trait StorageData<K>
+where
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val>,
+{
+    fn save(&self, env: &Env, key: &K);
+    fn load(env: &Env, key: &K) -> Self
+    where
+        Self: Sized;
+    fn delete(env: &Env, key: &K);
+    fn has(env: &Env, key: &K) -> bool;
+}
+
+pub trait StorageTypeInfo {
+    fn get_storage_type() -> StorageType;
+}
+
+#[allow(dead_code)]
+pub enum StorageType {
+    Instance,
+    Persistent,
+    Temporary,
+}
 
 pub fn with_instance_storage<F, T>(env: &Env, f: F) -> T
 where
@@ -33,140 +55,148 @@ where
     f(&env.storage().temporary())
 }
 
+#[macro_export]
 macro_rules! impl_storage_data {
     ($type:ty, $storage_func:expr) => {
-        impl StorageData for $type {
-            fn save(&self, env: &Env, key: &DataKey) {
+        impl<K> $crate::StorageData<K> for $type 
+        where
+            K: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>
+            + soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val>,
+        {
+            fn save(&self, env: &soroban_sdk::Env, key: &K) {
                 $storage_func(env, |storage| storage.set(key, self));
             }
 
-            fn load(env: &Env, key: &DataKey) -> Self {
+            fn load(env: &soroban_sdk::Env, key: &K) -> Self {
                 $storage_func(env, |storage| storage.get(key).unwrap())
             }
 
-            fn delete(env: &Env, key: &DataKey) {
+            fn delete(env: &soroban_sdk::Env, key: &K) {
                 $storage_func(env, |storage| storage.remove(key));
             }
 
-            fn has(env: &Env, key: &DataKey) -> bool {
+            fn has(env: &soroban_sdk::Env, key: &K) -> bool {
                 $storage_func(env, |storage| storage.has(key))
             }
         }
     };
 }
 
+#[macro_export]
 macro_rules! impl_storage {
     ($type:ty, Instance) => {
-        impl StorageTypeInfo for $type {
-            fn get_storage_type() -> StorageType {
-                StorageType::Instance
+        impl $crate::StorageTypeInfo for $type {
+            fn get_storage_type() -> $crate::StorageType {
+                $crate::StorageType::Instance
             }
         }
-        impl_storage_data!($type, with_instance_storage);
+        $crate::impl_storage_data!($type, $crate::with_instance_storage);
     };
     ($type:ty, Persistent) => {
-        impl StorageTypeInfo for $type {
-            fn get_storage_type() -> StorageType {
-                StorageType::Persistent
+        impl $crate::StorageTypeInfo for $type {
+            fn get_storage_type() -> $crate::StorageType {
+                $crate::StorageType::Persistent
             }
         }
-        impl_storage_data!($type, with_persistent_storage);
+        $crate::impl_storage_data!($type, $crate::with_persistent_storage);
     };
     ($type:ty, Temporary) => {
-        impl StorageTypeInfo for $type {
-            fn get_storage_type() -> StorageType {
-                StorageType::Temporary
+        impl $crate::StorageTypeInfo for $type {
+            fn get_storage_type() -> $crate::StorageType {
+                $crate::StorageType::Temporary
             }
         }
-        impl_storage_data!($type, with_temporary_storage);
+        $crate::impl_storage_data!($type, $crate::with_temporary_storage);
     };
 }
 
-pub fn load_data<T: StorageData>(env: &Env, key: &DataKey) -> T {
+pub fn load_data<T: StorageData<K>, K>(env: &Env, key: &K) -> T
+where
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
+{
     T::load(env, key)
 }
 
-pub fn has_data<T: StorageData>(env: &Env, key: &DataKey) -> bool {
+pub fn has_data<T, K>(env: &Env, key: &K) -> bool
+where
+    T: StorageData<K>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized, // Add the key type constraints
+{
     T::has(env, key)
 }
 
-pub fn delete_data<T: StorageData>(env: &Env, key: &DataKey) {
+pub fn delete_data<T, K>(env: &Env, key: &K)
+where
+    T: StorageData<K>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
+{
     T::delete(env, key)
 }
 
-pub fn save_data<T: StorageData>(env: &Env, key: &DataKey, data: &T) {
+pub fn save_data<T, K>(env: &Env, key: &K, data: &T)
+where
+    T: StorageData<K>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
+{
     data.save(env, key)
 }
 
-mod ledger_times {
-    // Assuming 6 seconds average time per ledger.
-    pub const LEDGERS_PER_MINUTE: u64 = 10;
-    pub const LEDGERS_PER_HOUR: u64 = LEDGERS_PER_MINUTE * 60;
-    pub const LEDGERS_PER_DAY: u64 = LEDGERS_PER_HOUR * 24;
-    pub const LEDGERS_PER_YEAR: u64 = LEDGERS_PER_DAY * 365;
-}
-
-pub fn bump_data<T>(
+pub fn bump_data<T, K>(
     env: &Env,
-    key: &DataKey,
+    key: &K,
     low_expiration_watermark: u64,
     hi_expiration_watermark: u64,
-    in_seconds: bool,
 ) where
-    T: StorageTypeInfo + StorageData,
+    T: StorageTypeInfo + StorageData<K>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
 {
-    fn seconds_to_ledgers(watermark: u64) -> u64 {
-        watermark
-            .checked_add(ledger_times::LEDGERS_PER_MINUTE - 1)
-            .and_then(|sum| sum.checked_div(ledger_times::LEDGERS_PER_MINUTE))
-            .expect("Invalid duration.")
-            .min(ledger_times::LEDGERS_PER_YEAR)
-    }
-
-    let (lo_exp, hi_exp) = if !in_seconds {
-        (low_expiration_watermark, hi_expiration_watermark)
-    } else {
-        (
-            seconds_to_ledgers(low_expiration_watermark),
-            seconds_to_ledgers(hi_expiration_watermark),
-        )
-    };
-
     match T::get_storage_type() {
         StorageType::Instance => {
             with_instance_storage(env, |storage| {
-                storage.bump(lo_exp as u32, hi_exp as u32);
+                storage.bump(low_expiration_watermark as u32, hi_expiration_watermark as u32);
             });
         }
         StorageType::Persistent => {
             with_persistent_storage(env, |storage| {
-                storage.bump(key, lo_exp as u32, hi_exp as u32);
+                storage.bump(key, low_expiration_watermark as u32, hi_expiration_watermark as u32);
             });
         }
         StorageType::Temporary => {
             with_temporary_storage(env, |storage| {
-                storage.bump(key, lo_exp as u32, hi_exp as u32);
+                storage.bump(key, low_expiration_watermark as u32, hi_expiration_watermark as u32);
             });
         }
     }
 }
 
-pub trait StorageData {
-    fn save(&self, env: &Env, key: &DataKey);
-    fn load(env: &Env, key: &DataKey) -> Self
-    where
-        Self: Sized;
-    fn delete(env: &Env, key: &DataKey);
-    fn has(env: &Env, key: &DataKey) -> bool;
+pub fn bump_data_conv<T, K, F>(
+    env: &Env,
+    key: &K,
+    low_expiration_watermark: u64,
+    hi_expiration_watermark: u64,
+    conv_func: Option<F>,
+) where
+    T: StorageTypeInfo + StorageData<K>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
+    F: Fn(u64) -> u64,
+{
+    let (lo_exp, hi_exp) = match conv_func {
+        Some(convert) => (
+            convert(low_expiration_watermark),
+            convert(hi_expiration_watermark),
+        ),
+        None => (
+            low_expiration_watermark,
+            hi_expiration_watermark,
+        ),
+    };
+
+    bump_data::<T, K>(
+        env,
+        key,
+        lo_exp,
+        hi_exp,
+    );
 }
 
-pub trait StorageTypeInfo {
-    fn get_storage_type() -> StorageType;
-}
 
-#[allow(dead_code)]
-pub enum StorageType {
-    Instance,
-    Persistent,
-    Temporary,
-}

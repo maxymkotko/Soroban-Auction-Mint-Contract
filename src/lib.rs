@@ -8,11 +8,15 @@
 
 #![no_std]
 
-mod auctions; // Auction behaviors and mechanisms.
 mod storage; // Contract data storage.
+
+mod types; // Contract types.
+mod auctions; // Auction behaviors and mechanisms.
+
 
 use crate::auctions::{behavior::BaseAuction, behavior::Dispatcher};
 use soroban_sdk::{contract, contractimpl, contractmeta, vec, Address, Env, Vec};
+use types::{AuctionData, DataKey, AdminData, BidData};
 use crate::storage::*;
 
 contractmeta!(
@@ -61,8 +65,8 @@ struct AuctionContract;
 #[contractimpl]
 impl AuctionContractTrait for AuctionContract {
     fn get_auction(env: Env, seller: Address) -> Option<AuctionData> {
-        if has_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone())) {
-            Some(load_data::<AuctionData>(
+        if has_data::<AuctionData, DataKey>(&env, &DataKey::AuctionData(seller.clone())) {
+            Some(load_data::<AuctionData, DataKey>(
                 &env,
                 &DataKey::AuctionData(seller.clone()),
             ))
@@ -72,7 +76,7 @@ impl AuctionContractTrait for AuctionContract {
     }
 
     fn resolve(env: Env, seller: Address) {
-        let auction_data = load_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone()));
+        let auction_data = load_data::<AuctionData, DataKey>(&env, &DataKey::AuctionData(seller.clone()));
         dispatcher!(auction_data.discount_percent > 0 && auction_data.discount_frequency > 0)
             .resolve(&env, &seller);
     }
@@ -80,7 +84,7 @@ impl AuctionContractTrait for AuctionContract {
     fn place_bid(env: Env, seller: Address, buyer: Address, amount: i128) {
         buyer.require_auth();
 
-        let auction_data = load_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone()));
+        let auction_data = load_data::<AuctionData, DataKey>(&env, &DataKey::AuctionData(seller.clone()));
         dispatcher!(auction_data.discount_percent > 0 && auction_data.discount_frequency > 0)
             .manage_bid(&env, &seller, &buyer, amount);
     }
@@ -88,23 +92,23 @@ impl AuctionContractTrait for AuctionContract {
     fn extend(env: Env, seller: Address, duration: u64) -> bool {
         seller.require_auth();
 
-        if !load_data::<AdminData>(&env, &DataKey::AdminData).extendable_auctions {
+        if !load_data::<AdminData, DataKey>(&env, &DataKey::AdminData).extendable_auctions {
             false
         }
         else {
-            let mut auction_data = load_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone()));
+            let mut auction_data = load_data::<AuctionData, DataKey>(&env, &DataKey::AuctionData(seller.clone()));
             auction_data.duration += duration;
-            save_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone()), &auction_data);
+            save_data::<AuctionData, DataKey>(&env, &DataKey::AuctionData(seller.clone()), &auction_data);
             true
         }  
     }
 
     fn initialize(env: Env, admin: Address, anti_snipe_time: u64, commission_rate: i128, extendable_auctions: bool) {
-        if has_data::<AdminData>(&env, &DataKey::AdminData) {
+        if has_data::<AdminData, DataKey>(&env, &DataKey::AdminData) {
             panic!("Admin already set.");
         }
 
-        save_data::<AdminData>(
+        save_data::<AdminData, DataKey>(
             &env,
             &DataKey::AdminData,
             &AdminData {
@@ -129,7 +133,7 @@ impl AuctionContractTrait for AuctionContract {
         discount_frequency: u64,
         compounded_discount: bool,
     ) {
-        if !has_data::<AdminData>(&env, &DataKey::AdminData) {
+        if !has_data::<AdminData, DataKey>(&env, &DataKey::AdminData) {
             panic!("Admin not set. Call initialize.");
         }
 

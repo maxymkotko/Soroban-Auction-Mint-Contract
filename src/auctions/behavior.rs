@@ -10,15 +10,23 @@ use soroban_sdk::{symbol_short, token, Address, Env, Symbol};
 
 use super::behavior_ascending_price::*;
 use super::behavior_descending_price::*;
-use crate::storage::*;
+use crate::{storage::*, types::{AdminData, AuctionData, DataKey, BidData}};
 
 // Event topics.
 const AUCTION: Symbol = symbol_short!("AUCTION");
 const BID: Symbol = symbol_short!("BID");
 
+pub mod ledger_times {
+    // Assuming 6 seconds average time per ledger.
+    pub const LEDGERS_PER_MINUTE: u64 = 10;
+    pub const LEDGERS_PER_HOUR: u64 = LEDGERS_PER_MINUTE * 60;
+    pub const LEDGERS_PER_DAY: u64 = LEDGERS_PER_HOUR * 24;
+    pub const LEDGERS_PER_YEAR: u64 = LEDGERS_PER_DAY * 365;
+}
+
 pub trait BaseAuction {
     fn start(&self, env: &Env, seller: &Address, auction_data: &AuctionData) {
-        if has_data::<AuctionData>(&env, &DataKey::AuctionData(seller.clone())) {
+        if has_data::<AuctionData, DataKey>(&env, &DataKey::AuctionData(seller.clone())) {
             panic!("Auction already running.");
         }
 
@@ -33,17 +41,23 @@ pub trait BaseAuction {
             &env.current_contract_address(),
             &auction_data.amount,
         );
-        save_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()), auction_data);
+        save_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()), auction_data);
 
         // Bump the storage according to auction duration,
         // adding a couple hours to avoid expiration with async resolve.
         let expiration_buffer: u64 = 7200;
-        bump_data::<AuctionData>(
+        bump_data_conv::<AuctionData, DataKey, fn(u64) -> u64>(
             env,
             &DataKey::AuctionData(seller.clone()),
             auction_data.duration + expiration_buffer,
             auction_data.duration + expiration_buffer,
-            true
+            Some(|watermark: u64| {
+                watermark
+                    .checked_add(ledger_times::LEDGERS_PER_MINUTE - 1)
+                    .and_then(|sum| sum.checked_div(ledger_times::LEDGERS_PER_MINUTE))
+                    .expect("Invalid duration.")
+                    .min(ledger_times::LEDGERS_PER_YEAR)
+            })
         );
 
         env.events()
@@ -57,7 +71,7 @@ pub trait BaseAuction {
             return;
         }
 
-        let mut auction_data = load_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()));
+        let mut auction_data = load_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()));
         let market = token::Client::new(&env, &auction_data.market);
 
         if amount == 0 {
@@ -84,7 +98,7 @@ pub trait BaseAuction {
                 market.transfer(&buyer, &env.current_contract_address(), &amount);
 
                 let anti_snipe_time =
-                    load_data::<AdminData>(&env, &DataKey::AdminData).anti_snipe_time;
+                    load_data::<AdminData, DataKey>(&env, &DataKey::AdminData).anti_snipe_time;
                 let sniper = env.ledger().timestamp()
                     >= auction_data.start_time + auction_data.duration - anti_snipe_time;
                 if sniper {
@@ -104,16 +118,16 @@ pub trait BaseAuction {
             panic!("Invalid bid amount.");
         }
 
-        save_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()), &auction_data);
+        save_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()), &auction_data);
         self.resolve(env, seller);
     }
 
     fn finalize(&self, env: &Env, seller: &Address, winner: Option<&BidData>) -> bool {
-        let auction_data = load_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()));
+        let auction_data = load_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()));
         match winner {
             Some(bid) => {
                 // We have a winner, transfer token to parties.
-                let admin_data = load_data::<AdminData>(&env, &DataKey::AdminData);
+                let admin_data = load_data::<AdminData, DataKey>(&env, &DataKey::AdminData);
                 let token = token::Client::new(&env, &auction_data.token);
                 let market = token::Client::new(&env, &auction_data.market);
                 let admin: Address = admin_data.admin;
@@ -138,7 +152,7 @@ pub trait BaseAuction {
                 }
 
                 // Delete the auction.
-                delete_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()));
+                delete_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()));
                 env.events()
                     .publish((AUCTION, symbol_short!("won")), seller);
                 true
@@ -162,7 +176,7 @@ pub trait BaseAuction {
                 }
 
                 // Delete the auction.
-                delete_data::<AuctionData>(env, &DataKey::AuctionData(seller.clone()));
+                delete_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()));
                 env.events()
                     .publish((AUCTION, symbol_short!("ended")), seller);
                 true
