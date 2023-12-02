@@ -408,38 +408,17 @@ impl TestContract {
         delete_data::<TestAdminData, TestDataKey>(&env, &key);
         assert_eq!(has_data::<TestAdminData, TestDataKey>(&env, &key), false);
 
+        save_data::<TestAdminData, TestDataKey>(&env, &key, &data);
+        assert_eq!(load_data::<TestAdminData, TestDataKey>(&env, &key), data);
+        assert_eq!(load_data_or_else::<TestAdminData, TestDataKey, _, _>(&env, &key, |opt| opt.unwrap()), data);
+
         // Test instance.
         data.save(&env, &key);
-        assert_eq!(load_data::<TestAdminData, TestDataKey>(&env, &key), data);
         assert_eq!(data.has(&env, &key), true);
         data.bump(&env, &key, 1, 1);
         data.delete(&env, &key);
         assert_eq!(data.has(&env, &key), false);
 
-        // Test with KeyedData.
-        let mut keyed_data = KeyedData::new(data, key.clone());
-        keyed_data.save(&env);
-        assert_eq!(
-            load_data_or_else::<TestAdminData, TestDataKey, _, _>(&env, &key, |opt| opt.unwrap()),
-            *keyed_data.get()
-        );
-
-        // Modify the data.
-        keyed_data.get_mut().address = Address::random(&env);
-        assert_ne!(
-            load_data_or_else::<TestAdminData, TestDataKey, _, _>(&env, &key, |opt| opt.unwrap()),
-            *keyed_data.get()
-        );
-        keyed_data.save(&env);
-        assert_eq!(
-            load_data_or_else::<TestAdminData, TestDataKey, _, _>(&env, &key, |opt| opt.unwrap()),
-            *keyed_data.get()
-        );
-
-        assert_eq!(keyed_data.has(&env), true);
-        keyed_data.bump(&env, 1, 1);
-        keyed_data.delete(&env);
-        assert_eq!(keyed_data.has(&env), false);
     }
 }
 

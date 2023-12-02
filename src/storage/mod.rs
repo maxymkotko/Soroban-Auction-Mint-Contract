@@ -11,26 +11,18 @@
 //! 
 //! Usage Example:
 //! 
-//! - **Implementing Storage for a Data Type:**
-//! Use the `impl_storage!` macro to implement the desired storage for the data type.
+//! Use the `impl_storage!` macro to implement the desired storage for the data type:
 //!   ```rust
 //!   // Example: Implementing Persistent storage for DataType with DataKeyType.
 //!   impl_storage!(DataType, DataKeyType, Persistent);
 //!   ```
 //! 
-//! - **Managing data with generics:**
+//! You can now manage your data with generics:
 //!   ```rust
 //!     // Example: Loading data from storage.
 //!     let data = load_data::<DataType, DataKeyType>(&env, &key);
 //!     // Example: Saving data to storage.
 //!     save_data::<DataType, DataKeyType>(&env, &key, &data);
-//!   ```
-//! 
-//! - **Managing data using the KeyedData wrapper**
-//!   ```rust
-//!     // Example: Saving data using the keyed data wrapper.
-//!     let keyed_data = KeyedData::new(data, key);
-//!     keyed_data.save(&env);
 //!   ```
 
 
