@@ -43,21 +43,22 @@ pub trait BaseAuction {
         );
         save_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()), auction_data);
 
+        fn convert_seconds_to_ledgers(watermark: u64) -> u64 {
+            watermark
+                .checked_add(ledger_times::LEDGERS_PER_MINUTE - 1)
+                .and_then(|sum| sum.checked_div(ledger_times::LEDGERS_PER_MINUTE))
+                .expect("Invalid duration.")
+                .min(ledger_times::LEDGERS_PER_YEAR)
+        }
+
         // Bump the storage according to auction duration,
         // adding a couple hours to avoid expiration with async resolve.
         let expiration_buffer: u64 = 7200;
-        bump_data_conv::<AuctionData, DataKey, fn(u64) -> u64>(
+        bump_data::<AuctionData, DataKey>(
             env,
             &DataKey::AuctionData(seller.clone()),
-            auction_data.duration + expiration_buffer,
-            auction_data.duration + expiration_buffer,
-            Some(|watermark: u64| {
-                watermark
-                    .checked_add(ledger_times::LEDGERS_PER_MINUTE - 1)
-                    .and_then(|sum| sum.checked_div(ledger_times::LEDGERS_PER_MINUTE))
-                    .expect("Invalid duration.")
-                    .min(ledger_times::LEDGERS_PER_YEAR)
-            })
+            convert_seconds_to_ledgers(auction_data.duration + expiration_buffer),
+            convert_seconds_to_ledgers(auction_data.duration + expiration_buffer)
         );
 
         env.events()

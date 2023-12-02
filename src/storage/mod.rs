@@ -6,25 +6,37 @@
     MIT License
 */
 
-//! The `storage` module provides interfaces with generic storage functions
-//! to manage contract data with Soroban Instance, Persistent, and Temporary storage.
+//! The `storage` module provides generic functions and traits to
+//! facilitate contract data interaction with `soroban_sdk` storage types.
 //! 
 //! Usage Example:
 //! 
-//! Use the `impl_storage!` macro to specify the contract storage for the type.
-//! - e.g., call: `impl_storage!(DataType, DataKeyType, Persistent);`
+//! - **Implementing Storage for a Data Type:**
+//! Use the `impl_storage!` macro to implement the desired storage for the data type.
+//!   ```rust
+//!   // Example: Implementing Persistent storage for DataType with DataKeyType.
+//!   impl_storage!(DataType, DataKeyType, Persistent);
+//!   ```
 //! 
-//! Manage data using generics:
-//! - e.g., load data: `load_data::<DataType, DataKeyType>(&env, &key);`
+//! - **Managing data with generics:**
+//!   ```rust
+//!     // Example: Loading data from storage.
+//!     let data = load_data::<DataType, DataKeyType>(&env, &key);
+//!     // Example: Saving data to storage.
+//!     save_data::<DataType, DataKeyType>(&env, &key, &data);
+//!   ```
 //! 
-//! Or, directly call methods on the instance:
-//! - e.g., save data: `data_type_instance.save(&env, &key);`
-//!
-//! A cutom conversion function can be provided with bump_data_conv.
-//! - e.g., in seconds: `bump_data_conv::<SomeContractType, DataKeyType,
-//!                         fn(u64) -> u64>(&env, &key, 3600, 7200, seconds_to_ledgers);`
-//! Or, call bump_data:
-//! - e.g., in ledgers: `bump_data::<SomeContractType, DataKeyType>(&env, &key, 600, 1200);`
+//! - **Managing data with direct instance method calls:**
+//!   ```rust
+//!     // Example: Saving data using an instance method.
+//!     DataType { /* fields */ }.save(&env, &key);
+//!   ```
+//! - **Managing data using the KeyedData convenience wrapper**
+//!   ```rust
+//!     // Example: Saving data using the keyed data wrapper.
+//!     let keyed_data = KeyedData::new(data, key);
+//!     keyed_data.save(&env);
+//!   ```
 
 
 #[macro_use]

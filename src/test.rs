@@ -6,13 +6,17 @@
     MIT License
 */
 
-use crate::{AuctionContract, AuctionContractClient, types::AuctionData};
+use crate::{impl_storage, storage::*, types::AuctionData, AuctionContract, AuctionContractClient};
 extern crate std;
 
 use core::panic::AssertUnwindSafe;
+use soroban_sdk::{
+    contract, contractimpl, contracttype,
+    testutils::{Address as _, Logs},
+    token, vec, Address, Env,
+};
 use std::panic::catch_unwind;
 use std::println;
-use soroban_sdk::{ testutils::{Address as _, Logs}, token, Address, Env, vec};
 use token::Client as TokenClient;
 use token::StellarAssetClient as TokenAdminClient;
 
@@ -27,18 +31,24 @@ fn create_auction_contract(e: &Env) -> AuctionContractClient {
     AuctionContractClient::new(e, &e.register_contract(None, AuctionContract {}))
 }
 
-fn start_auction(_env: &Env, auction_contract: &AuctionContractClient, auction_data: &AuctionData, seller: &Address) {
+fn start_auction(
+    _env: &Env,
+    auction_contract: &AuctionContractClient,
+    auction_data: &AuctionData,
+    seller: &Address,
+) {
     auction_contract.start(
         &seller,
         &auction_data.token,
         &auction_data.amount,
         &auction_data.duration,
-        &auction_data.market, 
+        &auction_data.market,
         &auction_data.reserve_price,
         &auction_data.ask_price,
         &auction_data.discount_percent,
         &auction_data.discount_frequency,
-        &auction_data.compounded_discount);
+        &auction_data.compounded_discount,
+    );
 }
 
 #[test]
@@ -48,23 +58,20 @@ fn test_all() {
 
     let initial_balance = 1000;
     let commission_rate = 10;
-    let token_supply:i128 = 5;
+    let token_supply: i128 = 5;
     let extendable_auctions = true;
     let token_admin = Address::random(&env);
     let seller = Address::random(&env);
     let (token, token_admin_client) = create_token_contract(&env, &token_admin);
-    let (market, market_admin_client) = create_token_contract(&env, &token_admin);   
+    let (market, market_admin_client) = create_token_contract(&env, &token_admin);
     let auction_contract = create_auction_contract(&env);
-    let bidders = [
-        Address::random(&env),
-        Address::random(&env)
-    ];
+    let bidders = [Address::random(&env), Address::random(&env)];
 
     // Initialize the balances.
-    token_admin_client.mint(&seller, &token_supply);    
+    token_admin_client.mint(&seller, &token_supply);
     for bidder in bidders.iter() {
         market_admin_client.mint(&bidder, &initial_balance);
-    }    
+    }
 
     // Initialize the contract. Sets the admin, anti_snipe_time (in seconds)
     // and commission_rate (in percent).
@@ -94,7 +101,7 @@ fn test_all() {
     // Should be matching all auction parameters.
     let mut test_auction = auction_contract.get_auction(&seller);
     match test_auction {
-        Some(test_auction) => {  
+        Some(test_auction) => {
             assert_eq!(test_auction, auction_data);
         }
         None => {}
@@ -102,7 +109,7 @@ fn test_all() {
 
     // Placing a zero bid should panic if no existing bid to cancel.
     let mut result = catch_unwind(AssertUnwindSafe(|| {
-       auction_contract.place_bid(&seller, &bidders[0], &0);
+        auction_contract.place_bid(&seller, &bidders[0], &0);
     }));
     assert!(result.is_err(), "No bid to cancel.");
 
@@ -124,17 +131,29 @@ fn test_all() {
     // Placing a new bid (bidder 2).
     auction_contract.place_bid(&seller, &bidders[1], &(auction_data.reserve_price + 2));
 
-    test_auction = auction_contract.get_auction(&seller);  
+    test_auction = auction_contract.get_auction(&seller);
     match test_auction {
-        Some(test_auction) => { 
+        Some(test_auction) => {
             // There should be 2 live bids at that point.
             assert_eq!(test_auction.bids.len(), 2);
 
             // Check the balances.
-            assert_eq!(market.balance(&bidders[0]), initial_balance - auction_data.reserve_price - 1);
-            assert_eq!(market.balance(&bidders[1]), initial_balance - auction_data.reserve_price - 2);
-            assert_eq!(market.balance(&auction_contract.address), (auction_data.reserve_price + 1) * 2 + 1);
-            assert_eq!(token.balance(&auction_contract.address), auction_data.amount);           
+            assert_eq!(
+                market.balance(&bidders[0]),
+                initial_balance - auction_data.reserve_price - 1
+            );
+            assert_eq!(
+                market.balance(&bidders[1]),
+                initial_balance - auction_data.reserve_price - 2
+            );
+            assert_eq!(
+                market.balance(&auction_contract.address),
+                (auction_data.reserve_price + 1) * 2 + 1
+            );
+            assert_eq!(
+                token.balance(&auction_contract.address),
+                auction_data.amount
+            );
         }
         None => {}
     }
@@ -145,16 +164,28 @@ fn test_all() {
     auction_contract.resolve(&seller);
 
     // Verify that no transfer occured.
-    test_auction = auction_contract.get_auction(&seller);  
+    test_auction = auction_contract.get_auction(&seller);
     match test_auction {
-        Some(test_auction) => {  
+        Some(test_auction) => {
             assert_eq!(test_auction.bids.len(), 2);
 
             // Verify that balances remain unchanged.
-            assert_eq!(market.balance(&bidders[0]), initial_balance - auction_data.reserve_price - 1);
-            assert_eq!(market.balance(&bidders[1]), initial_balance - auction_data.reserve_price - 2);
-            assert_eq!(market.balance(&auction_contract.address), (auction_data.reserve_price + 1) * 2 + 1);
-            assert_eq!(token.balance(&auction_contract.address), auction_data.amount);           
+            assert_eq!(
+                market.balance(&bidders[0]),
+                initial_balance - auction_data.reserve_price - 1
+            );
+            assert_eq!(
+                market.balance(&bidders[1]),
+                initial_balance - auction_data.reserve_price - 2
+            );
+            assert_eq!(
+                market.balance(&auction_contract.address),
+                (auction_data.reserve_price + 1) * 2 + 1
+            );
+            assert_eq!(
+                token.balance(&auction_contract.address),
+                auction_data.amount
+            );
         }
         None => {}
     }
@@ -170,7 +201,7 @@ fn test_all() {
     auction_contract.place_bid(&seller, &bidders[1], &(auction_data.ask_price));
 
     // Auction should have been resolved immediately.
-    test_auction = auction_contract.get_auction(&seller);  
+    test_auction = auction_contract.get_auction(&seller);
     match test_auction {
         Some(_test_auction) => {
             assert!(false, "Auction should not be running.");
@@ -185,13 +216,22 @@ fn test_all() {
     assert!(result.is_err(), "No auction to resolve.");
 
     // Verify all balances to check the auction executed properly.
-    assert_eq!(market.balance(&bidders[1]), initial_balance - auction_data.ask_price);
+    assert_eq!(
+        market.balance(&bidders[1]),
+        initial_balance - auction_data.ask_price
+    );
     assert_eq!(token.balance(&bidders[1]), auction_data.amount);
     assert_eq!(market.balance(&bidders[0]), initial_balance);
     assert_eq!(market.balance(&auction_contract.address), 0);
     assert_eq!(token.balance(&auction_contract.address), 0);
-    assert_eq!(market.balance(&token_admin), auction_data.ask_price * commission_rate / 100);
-    assert_eq!(market.balance(&seller), auction_data.ask_price * (100 - commission_rate) / 100);
+    assert_eq!(
+        market.balance(&token_admin),
+        auction_data.ask_price * commission_rate / 100
+    );
+    assert_eq!(
+        market.balance(&seller),
+        auction_data.ask_price * (100 - commission_rate) / 100
+    );
     assert_eq!(token.balance(&seller), token_supply - 1);
 
     // Start an ascending price auction.
@@ -203,7 +243,7 @@ fn test_all() {
     auction_contract.place_bid(&seller, &bidders[0], &(auction_data.ask_price));
 
     // The auction should have resolved as ask price is met.
-    test_auction = auction_contract.get_auction(&seller);  
+    test_auction = auction_contract.get_auction(&seller);
     match test_auction {
         Some(_test_auction) => {
             assert!(false, "Auction should not be running.");
@@ -218,12 +258,21 @@ fn test_all() {
     assert!(result.is_err(), "No auction to resolve.");
 
     // Verify the balances.
-    assert_eq!(market.balance(&bidders[0]), initial_balance - auction_data.ask_price);
+    assert_eq!(
+        market.balance(&bidders[0]),
+        initial_balance - auction_data.ask_price
+    );
     assert_eq!(token.balance(&bidders[0]), auction_data.amount);
     assert_eq!(market.balance(&auction_contract.address), 0);
     assert_eq!(token.balance(&auction_contract.address), 0);
-    assert_eq!(market.balance(&token_admin), (auction_data.ask_price * commission_rate / 100) * 2);
-    assert_eq!(market.balance(&seller), (auction_data.ask_price * (100 - commission_rate) / 100) * 2);
+    assert_eq!(
+        market.balance(&token_admin),
+        (auction_data.ask_price * commission_rate / 100) * 2
+    );
+    assert_eq!(
+        market.balance(&seller),
+        (auction_data.ask_price * (100 - commission_rate) / 100) * 2
+    );
     assert_eq!(token.balance(&seller), token_supply - 2);
 
     // Start a new ascending price auction.
@@ -236,14 +285,13 @@ fn test_all() {
     auction_contract.resolve(&seller);
 
     // Extend the auction duration.
-    auction_contract.extend(&seller, &auction_data.duration);    
-    test_auction = auction_contract.get_auction(&seller);  
+    auction_contract.extend(&seller, &auction_data.duration);
+    test_auction = auction_contract.get_auction(&seller);
     match test_auction {
-        Some(_test_auction) => {            
+        Some(_test_auction) => {
             assert_eq!(_test_auction.duration, auction_data.duration * 2);
         }
-        None => {
-        }
+        None => {}
     }
 
     // Print all.
@@ -260,26 +308,28 @@ fn test_anti_sniping() {
     let initial_balance = 1000;
     let commission_rate = 10;
     let extendable_auctions = true;
-    let token_supply:i128 = 5;
+    let token_supply: i128 = 5;
     let token_admin = Address::random(&env);
     let seller = Address::random(&env);
     let (token, token_admin_client) = create_token_contract(&env, &token_admin);
-    let (market, market_admin_client) = create_token_contract(&env, &token_admin);   
+    let (market, market_admin_client) = create_token_contract(&env, &token_admin);
     let auction_contract = create_auction_contract(&env);
-    let bidders = [
-        Address::random(&env),
-        Address::random(&env)
-    ];
+    let bidders = [Address::random(&env), Address::random(&env)];
 
     // Initialize the balances.
-    token_admin_client.mint(&seller, &token_supply);    
+    token_admin_client.mint(&seller, &token_supply);
     for bidder in bidders.iter() {
         market_admin_client.mint(&bidder, &initial_balance);
-    }    
+    }
 
     // Initialize the contract. Sets the admin, anti_snipe_time (in seconds)
     // and commission_rate (in percent).
-    auction_contract.initialize(&token_admin, &duration, &commission_rate, &extendable_auctions);
+    auction_contract.initialize(
+        &token_admin,
+        &duration,
+        &commission_rate,
+        &extendable_auctions,
+    );
 
     // No auction found should return None.
     assert_eq!(auction_contract.get_auction(&seller), None);
@@ -308,7 +358,7 @@ fn test_anti_sniping() {
     auction_contract.place_bid(&seller, &bidders[0], &(auction_data.reserve_price));
     let test_auction = auction_contract.get_auction(&seller);
     match test_auction {
-        Some(test_auction) => {  
+        Some(test_auction) => {
             // There should be 1 live bid at that point.
             assert_eq!(test_auction.bids.len(), 1);
 
@@ -323,5 +373,81 @@ fn test_anti_sniping() {
         }
         None => {}
     }
+}
 
+#[contract]
+pub struct TestContract;
+
+#[contractimpl]
+impl TestContract {
+    pub fn run(env: Env) {
+        #[derive(Clone, Debug)]
+        #[contracttype]
+        pub enum TestDataKey {
+            AdminData,
+            AuctionData(Address),
+        }
+
+        #[contracttype]
+        #[derive(Clone, Eq, PartialEq, Debug)]
+        pub struct TestAdminData {
+            pub address: Address,
+        }
+
+        impl_storage!(TestAdminData, Instance);
+
+        let key = TestDataKey::AdminData;
+        let data = TestAdminData {
+            address: Address::random(&env),
+        };
+
+        // Test generic functions.
+        save_data::<TestAdminData, TestDataKey>(&env, &key, &data);
+        assert_eq!(has_data::<TestAdminData, TestDataKey>(&env, &key), true);
+        bump_data::<TestAdminData, TestDataKey>(&env, &key, 1, 1);
+        delete_data::<TestAdminData, TestDataKey>(&env, &key);
+        assert_eq!(has_data::<TestAdminData, TestDataKey>(&env, &key), false);
+
+        // Test instance.
+        data.save(&env, &key);
+        assert_eq!(load_data::<TestAdminData, TestDataKey>(&env, &key), data);
+        assert_eq!(data.has(&env, &key), true);
+        data.bump(&env, &key, 1, 1);
+        data.delete(&env, &key);
+        assert_eq!(data.has(&env, &key), false);
+
+        // Test with KeyedData.
+        let mut keyed_data = KeyedData::new(data, key.clone());
+        keyed_data.save(&env);
+        assert_eq!(
+            load_data::<TestAdminData, TestDataKey>(&env, &key),
+            *keyed_data.get()
+        );
+
+        // Modify the data.
+        keyed_data.get_mut().address = Address::random(&env);
+        assert_ne!(
+            load_data::<TestAdminData, TestDataKey>(&env, &key),
+            *keyed_data.get()
+        );
+        keyed_data.save(&env);
+        assert_eq!(
+            load_data::<TestAdminData, TestDataKey>(&env, &key),
+            *keyed_data.get()
+        );
+
+        assert_eq!(keyed_data.has(&env), true);
+        keyed_data.bump(&env, 1, 1);
+        keyed_data.delete(&env);
+        assert_eq!(keyed_data.has(&env), false);
+    }
+}
+
+#[test]
+fn test_delete_and_has_data() {
+    let env = Env::default();
+
+    let contract_id = env.register_contract(None, TestContract);
+    let client = TestContractClient::new(&env, &contract_id);
+    client.run();
 }
