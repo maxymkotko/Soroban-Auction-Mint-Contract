@@ -26,12 +26,7 @@
 //!     save_data::<DataType, DataKeyType>(&env, &key, &data);
 //!   ```
 //! 
-//! - **Managing data with direct instance method calls:**
-//!   ```rust
-//!     // Example: Saving data using an instance method.
-//!     DataType { /* fields */ }.save(&env, &key);
-//!   ```
-//! - **Managing data using the KeyedData convenience wrapper**
+//! - **Managing data using the KeyedData wrapper**
 //!   ```rust
 //!     // Example: Saving data using the keyed data wrapper.
 //!     let keyed_data = KeyedData::new(data, key);

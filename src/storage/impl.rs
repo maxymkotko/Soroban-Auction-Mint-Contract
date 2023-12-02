@@ -36,10 +36,7 @@ pub trait StorageData<K>
 where
     K: IntoVal<Env, Val> + TryFromVal<Env, Val>,
 {
-    fn load(env: &Env, key: &K) -> Self
-    where
-        Self: Sized;
-    fn try_load(env: &Env, key: &K) -> Result<Self, StorageError>
+    fn load(env: &Env, key: &K) -> Option<Self>
     where
         Self: Sized;
     fn save(&self, env: &Env, key: &K);
@@ -56,15 +53,8 @@ macro_rules! impl_storage_data {
             K: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>
                 + soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val>,
         {
-            fn load(env: &soroban_sdk::Env, key: &K) -> Self {
-                $storage_func(env, |storage| storage.get(key).unwrap())
-            }
-
-            fn try_load(env: &soroban_sdk::Env, key: &K) -> Result<Self, $crate::StorageError> {
-                match $storage_func(env, |storage| storage.get(key)) {
-                    Some(data) => Ok(data),
-                    None => Err($crate::StorageError::DataNotFound),
-                }
+            fn load(env: &soroban_sdk::Env, key: &K) -> Option<Self> {
+                $storage_func(env, |storage| storage.get(key))
             }
 
             fn save(&self, env: &soroban_sdk::Env, key: &K) {
@@ -151,23 +141,16 @@ pub fn load_data<T: StorageData<K>, K>(env: &Env, key: &K) -> T
 where
     K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
 {
-    T::load(env, key)
+    T::load(env, key).unwrap()
 }
 
-pub fn has_data<T, K>(env: &Env, key: &K) -> bool
+pub fn load_data_or_else<T, K, H, R>(env: &Env, key: &K, handler: H) -> R
 where
     T: StorageData<K>,
     K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
+    H: FnOnce(Option<T>) -> R,
 {
-    T::try_load(env, key).is_ok()
-}
-
-pub fn delete_data<T, K>(env: &Env, key: &K)
-where
-    T: StorageData<K>,
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
-{
-    T::load(env, key).delete(env, key);
+    handler(T::load(env, key))
 }
 
 pub fn save_data<T, K>(env: &Env, key: &K, data: &T)
@@ -176,6 +159,22 @@ where
     K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
 {
     data.save(env, key)
+}
+
+pub fn has_data<T, K>(env: &Env, key: &K) -> bool
+where
+    T: StorageData<K>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
+{
+    T::load(env, key).is_some()
+}
+
+pub fn delete_data<T, K>(env: &Env, key: &K)
+where
+    T: StorageData<K>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
+{
+    T::load(env, key).unwrap().delete(env, key);
 }
 
 pub fn bump_data<T, K>(
@@ -187,11 +186,7 @@ pub fn bump_data<T, K>(
     T: StorageTypeInfo + StorageData<K>,
     K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
 {
-    T::load(env, key).bump(env, key, low_expiration_watermark, hi_expiration_watermark);
-}
-
-pub enum StorageError {
-    DataNotFound,
+    T::load(env, key).unwrap().bump(env, key, low_expiration_watermark, hi_expiration_watermark);
 }
 
 #[allow(dead_code)]

@@ -420,19 +420,19 @@ impl TestContract {
         let mut keyed_data = KeyedData::new(data, key.clone());
         keyed_data.save(&env);
         assert_eq!(
-            load_data::<TestAdminData, TestDataKey>(&env, &key),
+            load_data_or_else::<TestAdminData, TestDataKey, _, _>(&env, &key, |opt| opt.unwrap()),
             *keyed_data.get()
         );
 
         // Modify the data.
         keyed_data.get_mut().address = Address::random(&env);
         assert_ne!(
-            load_data::<TestAdminData, TestDataKey>(&env, &key),
+            load_data_or_else::<TestAdminData, TestDataKey, _, _>(&env, &key, |opt| opt.unwrap()),
             *keyed_data.get()
         );
         keyed_data.save(&env);
         assert_eq!(
-            load_data::<TestAdminData, TestDataKey>(&env, &key),
+            load_data_or_else::<TestAdminData, TestDataKey, _, _>(&env, &key, |opt| opt.unwrap()),
             *keyed_data.get()
         );
 
