@@ -6,6 +6,7 @@
     MIT License
 */
 
+use core::marker::PhantomData;
 use soroban_sdk::{
     storage::{Instance, Persistent, Temporary},
     Env, IntoVal, TryFromVal, Val,
@@ -13,72 +14,110 @@ use soroban_sdk::{
 
 pub fn with_instance_storage<F, T>(env: &Env, f: F) -> T
 where
-    F: FnOnce(&Instance) -> T,
+    F: FnOnce(StorageType, &Instance) -> T,
 {
-    f(&env.storage().instance())
+    f(StorageType::Instance, &env.storage().instance())
 }
 
 pub fn with_persistent_storage<F, T>(env: &Env, f: F) -> T
 where
-    F: FnOnce(&Persistent) -> T,
+    F: FnOnce(StorageType, &Persistent) -> T,
 {
-    f(&env.storage().persistent())
+    f(StorageType::Persistent, &env.storage().persistent())
 }
 
 pub fn with_temporary_storage<F, T>(env: &Env, f: F) -> T
 where
-    F: FnOnce(&Temporary) -> T,
+    F: FnOnce(StorageType, &Temporary) -> T,
 {
-    f(&env.storage().temporary())
+    f(StorageType::Temporary, &env.storage().temporary())
 }
 
-pub trait StorageData<K>
+pub struct KeyedData<K, T>
 where
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone,
 {
-    fn load(env: &Env, key: &K) -> Option<Self>
-    where
-        Self: Sized;
-    fn save(&self, env: &Env, key: &K);
-    fn delete(&self, env: &Env, key: &K);
-    fn has(&self, env: &Env, key: &K) -> bool;
-    fn bump(&self, env: &Env, key: &K, low_expiration_watermark: u64, hi_expiration_watermark: u64);
+    key: K,
+    _phantom: PhantomData<*const T>,
+}
+
+impl<K, T> KeyedData<K, T>
+where
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone,
+{
+    pub fn new(key: K) -> Self {
+        KeyedData {
+            key,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn get_key(&self) -> &K {
+        &self.key
+    }
+}
+
+#[allow(dead_code)]
+pub enum StorageType {
+    Instance,
+    Persistent,
+    Temporary,
+}
+
+pub trait StorageTypeInfo {
+    fn get_storage_type() -> StorageType;
+}
+
+pub trait StorageData<T> {
+    fn load(&self, env: &Env) -> Option<T>;
+    fn save(&self, env: &Env, data: &T);
+    fn delete(&self, env: &Env);
+    fn has(&self, env: &Env) -> bool;
+    fn bump(&self, env: &Env, low_expiration_watermark: u64, hi_expiration_watermark: u64);
+    fn get_storage_type(env: &Env) -> StorageType;
 }
 
 #[macro_export]
 macro_rules! impl_storage_data {
-    ($type:ty, $storage_func:expr) => {
-        impl<K> $crate::StorageData<K> for $type
+    ($data_type:ty, $storage_func:expr) => {
+        impl<K> $crate::StorageData<$data_type> for $crate::KeyedData<K, $data_type>
         where
             K: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>
-                + soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val>,
+                + soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val>
+                + Clone,
         {
-            fn load(env: &soroban_sdk::Env, key: &K) -> Option<Self> {
-                $storage_func(env, |storage| storage.get(key))
+            fn get_storage_type(env: &soroban_sdk::Env) -> $crate::StorageType {
+                $storage_func(env, |storage_type, _storage| storage_type)
             }
 
-            fn save(&self, env: &soroban_sdk::Env, key: &K) {
-                $storage_func(env, |storage| storage.set(key, self));
+            fn load(&self, env: &soroban_sdk::Env) -> Option<$data_type> {
+                $storage_func(env, |_storage_type, storage| storage.get(self.get_key()))
+                    .map(|data| data)
             }
 
-            fn delete(&self, env: &soroban_sdk::Env, key: &K) {
-                $storage_func(env, |storage| storage.remove(key));
+            fn save(&self, env: &soroban_sdk::Env, data: &$data_type) {
+                $storage_func(env, |_storage_type, storage| {
+                    storage.set(self.get_key(), data)
+                });
             }
 
-            fn has(&self, env: &soroban_sdk::Env, key: &K) -> bool {
-                $storage_func(env, |storage| storage.has(key))
+            fn delete(&self, env: &soroban_sdk::Env) {
+                $storage_func(env, |_storage_type, storage| storage.remove(self.get_key()));
+            }
+
+            fn has(&self, env: &soroban_sdk::Env) -> bool {
+                $storage_func(env, |_storage_type, storage| storage.has(self.get_key()))
             }
 
             fn bump(
                 &self,
                 env: &soroban_sdk::Env,
-                key: &K,
                 low_expiration_watermark: u64,
                 hi_expiration_watermark: u64,
             ) {
-                match <$type as $crate::StorageTypeInfo>::get_storage_type() {
+                match Self::get_storage_type(&env) {
                     $crate::StorageType::Instance => {
-                        $crate::with_instance_storage(env, |storage| {
+                        $crate::with_instance_storage(env, |_storage_type, storage| {
                             storage.bump(
                                 low_expiration_watermark as u32,
                                 hi_expiration_watermark as u32,
@@ -86,18 +125,18 @@ macro_rules! impl_storage_data {
                         });
                     }
                     $crate::StorageType::Persistent => {
-                        $crate::with_persistent_storage(env, |storage| {
+                        $crate::with_persistent_storage(env, |_storage_type, storage| {
                             storage.bump(
-                                key,
+                                self.get_key(),
                                 low_expiration_watermark as u32,
                                 hi_expiration_watermark as u32,
                             );
                         });
                     }
                     $crate::StorageType::Temporary => {
-                        $crate::with_temporary_storage(env, |storage| {
+                        $crate::with_temporary_storage(env, |_storage_type, storage| {
                             storage.bump(
-                                key,
+                                self.get_key(),
                                 low_expiration_watermark as u32,
                                 hi_expiration_watermark as u32,
                             );
@@ -111,70 +150,56 @@ macro_rules! impl_storage_data {
 
 #[macro_export]
 macro_rules! impl_storage {
-    ($type:ty, Instance) => {
-        impl $crate::StorageTypeInfo for $type {
-            fn get_storage_type() -> $crate::StorageType {
-                $crate::StorageType::Instance
-            }
-        }
-        $crate::impl_storage_data!($type, $crate::with_instance_storage);
+    ($data_type:ty, Instance) => {
+        $crate::impl_storage_data!($data_type, $crate::with_instance_storage);
     };
-    ($type:ty, Persistent) => {
-        impl $crate::StorageTypeInfo for $type {
-            fn get_storage_type() -> $crate::StorageType {
-                $crate::StorageType::Persistent
-            }
-        }
-        $crate::impl_storage_data!($type, $crate::with_persistent_storage);
+    ($data_type:ty, Persistent) => {
+        $crate::impl_storage_data!($data_type, $crate::with_persistent_storage);
     };
-    ($type:ty, Temporary) => {
-        impl $crate::StorageTypeInfo for $type {
-            fn get_storage_type() -> $crate::StorageType {
-                $crate::StorageType::Temporary
-            }
-        }
-        $crate::impl_storage_data!($type, $crate::with_temporary_storage);
+    ($data_type:ty, Temporary) => {
+        $crate::impl_storage_data!($data_type, $crate::with_temporary_storage);
     };
 }
 
-pub fn load_data<T: StorageData<K>, K>(env: &Env, key: &K) -> T
+pub fn load_data<T, K>(env: &Env, key: &K) -> T
 where
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
+    KeyedData<K, T>: StorageData<T>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone + ?Sized,
 {
-    T::load(env, key).unwrap()
+    KeyedData::<K, T>::new(key.clone()).load(env).unwrap()
 }
 
-pub fn load_data_or_else<T, K, H, R>(env: &Env, key: &K, handler: H) -> R
+pub fn load_data_or_else<T, K, F, R>(env: &Env, key: &K, handler: F) -> R
 where
-    T: StorageData<K>,
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
-    H: FnOnce(Option<T>) -> R,
+    KeyedData<K, T>: StorageData<T>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone + ?Sized,
+    F: FnOnce(Option<T>) -> R,
 {
-    handler(T::load(env, key))
+    handler(KeyedData::<K, T>::new(key.clone()).load(env))
 }
 
 pub fn save_data<T, K>(env: &Env, key: &K, data: &T)
 where
-    T: StorageData<K>,
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
+    KeyedData<K, T>: StorageData<T>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone + ?Sized,
 {
-    data.save(env, key)
+    KeyedData::<K, T>::new(key.clone()).save(env, data);
 }
 
 pub fn has_data<T, K>(env: &Env, key: &K) -> bool
 where
-    T: StorageData<K>,
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
+    KeyedData<K, T>: StorageData<T>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone + ?Sized,
 {
-    T::load(env, key).is_some()
+    KeyedData::<K, T>::new(key.clone()).has(env)
 }
 
 pub fn delete_data<T, K>(env: &Env, key: &K)
 where
-    T: StorageData<K>,
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
+    KeyedData<K, T>: StorageData<T>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone + ?Sized,
 {
-    T::load(env, key).unwrap().delete(env, key);
+    KeyedData::<K, T>::new(key.clone()).delete(env);
 }
 
 pub fn bump_data<T, K>(
@@ -183,19 +208,12 @@ pub fn bump_data<T, K>(
     low_expiration_watermark: u64,
     hi_expiration_watermark: u64,
 ) where
-    T: StorageTypeInfo + StorageData<K>,
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
+    KeyedData<K, T>: StorageData<T>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone + ?Sized,
 {
-    T::load(env, key).unwrap().bump(env, key, low_expiration_watermark, hi_expiration_watermark);
-}
-
-#[allow(dead_code)]
-pub enum StorageType {
-    Instance,
-    Persistent,
-    Temporary,
-}
-
-pub trait StorageTypeInfo {
-    fn get_storage_type() -> StorageType;
+    KeyedData::<K, T>::new(key.clone()).bump(
+        env,
+        low_expiration_watermark,
+        hi_expiration_watermark,
+    );
 }
