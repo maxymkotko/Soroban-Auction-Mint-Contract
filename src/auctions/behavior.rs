@@ -26,7 +26,7 @@ pub mod ledger_times {
 
 pub trait BaseAuction {
     fn start(&self, env: &Env, seller: &Address, auction_data: &AuctionData) {
-        if has_data::<AuctionData, DataKey>(&env, &DataKey::AuctionData(seller.clone())) {
+        if has_data::<DataKey, AuctionData>(&env, &DataKey::AuctionData(seller.clone())) {
             panic!("Auction already running.");
         }
 
@@ -41,7 +41,7 @@ pub trait BaseAuction {
             &env.current_contract_address(),
             &auction_data.amount,
         );
-        save_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()), auction_data);
+        save_data::<DataKey, AuctionData>(env, &DataKey::AuctionData(seller.clone()), auction_data);
 
         fn convert_seconds_to_ledgers(watermark: u64) -> u64 {
             watermark
@@ -54,7 +54,7 @@ pub trait BaseAuction {
         // Bump the storage according to auction duration,
         // adding a couple hours to avoid expiration with async resolve.
         let expiration_buffer: u64 = 7200;
-        bump_data::<AuctionData, DataKey>(
+        bump_data::<DataKey, AuctionData>(
             env,
             &DataKey::AuctionData(seller.clone()),
             convert_seconds_to_ledgers(auction_data.duration + expiration_buffer),
@@ -72,7 +72,7 @@ pub trait BaseAuction {
             return;
         }
 
-        let mut auction_data = load_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()));
+        let mut auction_data = load_data::<DataKey, AuctionData>(env, &DataKey::AuctionData(seller.clone()));
         let market = token::Client::new(&env, &auction_data.market);
 
         if amount == 0 {
@@ -99,7 +99,7 @@ pub trait BaseAuction {
                 market.transfer(&buyer, &env.current_contract_address(), &amount);
 
                 let anti_snipe_time =
-                    load_data::<AdminData, DataKey>(&env, &DataKey::AdminData).anti_snipe_time;
+                    load_data::<DataKey, AdminData>(&env, &DataKey::AdminData).anti_snipe_time;
                 let sniper = env.ledger().timestamp()
                     >= auction_data.start_time + auction_data.duration - anti_snipe_time;
                 if sniper {
@@ -119,16 +119,16 @@ pub trait BaseAuction {
             panic!("Invalid bid amount.");
         }
 
-        save_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()), &auction_data);
+        save_data::<DataKey, AuctionData>(env, &DataKey::AuctionData(seller.clone()), &auction_data);
         self.resolve(env, seller);
     }
 
     fn finalize(&self, env: &Env, seller: &Address, winner: Option<&BidData>) -> bool {
-        let auction_data = load_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()));
+        let auction_data = load_data::<DataKey, AuctionData>(env, &DataKey::AuctionData(seller.clone()));
         match winner {
             Some(bid) => {
                 // We have a winner, transfer token to parties.
-                let admin_data = load_data::<AdminData, DataKey>(&env, &DataKey::AdminData);
+                let admin_data = load_data::<DataKey, AdminData>(&env, &DataKey::AdminData);
                 let token = token::Client::new(&env, &auction_data.token);
                 let market = token::Client::new(&env, &auction_data.market);
                 let admin: Address = admin_data.admin;
@@ -153,7 +153,7 @@ pub trait BaseAuction {
                 }
 
                 // Delete the auction.
-                delete_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()));
+                delete_data::<DataKey, AuctionData>(env, &DataKey::AuctionData(seller.clone()));
                 env.events()
                     .publish((AUCTION, symbol_short!("won")), seller);
                 true
@@ -177,7 +177,7 @@ pub trait BaseAuction {
                 }
 
                 // Delete the auction.
-                delete_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()));
+                delete_data::<DataKey, AuctionData>(env, &DataKey::AuctionData(seller.clone()));
                 env.events()
                     .publish((AUCTION, symbol_short!("ended")), seller);
                 true

@@ -8,7 +8,7 @@
 
 use soroban_sdk::{contracttype, Address, Vec};
 
-use crate::impl_storage;
+use crate::impl_soroban_storage;
 
 #[derive(Clone)]
 #[contracttype]
@@ -35,7 +35,7 @@ pub struct AdminData {
 }
 
 // Implement AdminData with Instance storage.
-impl_storage!(AdminData, Instance);
+impl_soroban_storage!(AdminData, Instance);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
@@ -54,4 +54,4 @@ pub struct AuctionData {
 }
 
 // Implement AuctionData with Persistent storage.
-impl_storage!(AuctionData, Persistent);
+impl_soroban_storage!(AuctionData, Persistent);

@@ -80,7 +80,7 @@ struct AuctionContract;
 #[contractimpl]
 impl AuctionContractTrait for AuctionContract {
     fn get_auction(env: Env, seller: Address) -> Option<AuctionData> {
-        load_data_or_else::<AuctionData, DataKey, _, _>(
+        load_data_or_else::<DataKey, AuctionData, _, _>(
             &env,
             &DataKey::AuctionData(seller),
             |opt| opt,
@@ -89,7 +89,7 @@ impl AuctionContractTrait for AuctionContract {
 
     fn resolve(env: Env, seller: Address) {
         let auction_data =
-            load_data::<AuctionData, DataKey>(&env, &DataKey::AuctionData(seller.clone()));
+            load_data::<DataKey, AuctionData>(&env, &DataKey::AuctionData(seller.clone()));
         dispatcher!(auction_data.discount_percent > 0 && auction_data.discount_frequency > 0)
             .resolve(&env, &seller);
     }
@@ -98,7 +98,7 @@ impl AuctionContractTrait for AuctionContract {
         buyer.require_auth();
 
         let auction_data =
-            load_data::<AuctionData, DataKey>(&env, &DataKey::AuctionData(seller.clone()));
+            load_data::<DataKey, AuctionData>(&env, &DataKey::AuctionData(seller.clone()));
         dispatcher!(auction_data.discount_percent > 0 && auction_data.discount_frequency > 0)
             .manage_bid(&env, &seller, &buyer, amount);
     }
@@ -106,7 +106,7 @@ impl AuctionContractTrait for AuctionContract {
     fn extend(env: Env, seller: Address, duration: u64) -> bool {
         seller.require_auth();
 
-        if !load_data_or_else::<AdminData, DataKey, _, _>(&env, &DataKey::AdminData, |opt| {
+        if !load_data_or_else::<DataKey, AdminData, _, _>(&env, &DataKey::AdminData, |opt| {
             opt.unwrap_or_else(|| panic!("Admin not set. Call initialize."))
         })
         .extendable_auctions
@@ -114,9 +114,9 @@ impl AuctionContractTrait for AuctionContract {
             false
         } else {
             let mut auction_data =
-                load_data::<AuctionData, DataKey>(&env, &DataKey::AuctionData(seller.clone()));
+                load_data::<DataKey, AuctionData>(&env, &DataKey::AuctionData(seller.clone()));
             auction_data.duration += duration;
-            save_data::<AuctionData, DataKey>(
+            save_data::<DataKey, AuctionData>(
                 &env,
                 &DataKey::AuctionData(seller.clone()),
                 &auction_data,
@@ -132,11 +132,11 @@ impl AuctionContractTrait for AuctionContract {
         commission_rate: i128,
         extendable_auctions: bool,
     ) {
-        if has_data::<AdminData, DataKey>(&env, &DataKey::AdminData) {
+        if has_data::<DataKey, AdminData>(&env, &DataKey::AdminData) {
             panic!("Admin already set.");
         }
 
-        save_data::<AdminData, DataKey>(
+        save_data::<DataKey, AdminData>(
             &env,
             &DataKey::AdminData,
             &AdminData {
@@ -161,7 +161,7 @@ impl AuctionContractTrait for AuctionContract {
         discount_frequency: u64,
         compounded_discount: bool,
     ) {
-        if !has_data::<AdminData, DataKey>(&env, &DataKey::AdminData) {
+        if !has_data::<DataKey, AdminData>(&env, &DataKey::AdminData) {
             panic!("Admin not set. Call initialize.");
         }
 

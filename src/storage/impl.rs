@@ -33,22 +33,22 @@ where
     f(StorageType::Temporary, &env.storage().temporary())
 }
 
-pub struct KeyedData<K, T>
+pub struct StorageProxy<'a, K, T>
 where
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone,
+    K: 'a + IntoVal<Env, Val> + TryFromVal<Env, Val>,
 {
-    key: K,
-    _phantom: PhantomData<*const T>,
+    key: &'a K,
+    _data: PhantomData<*const T>,
 }
 
-impl<K, T> KeyedData<K, T>
+impl<'a, K, T> StorageProxy<'a, K, T>
 where
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val>,
 {
-    pub fn new(key: K) -> Self {
-        KeyedData {
+    fn new(key: &'a K) -> Self {
+        StorageProxy {
             key,
-            _phantom: PhantomData,
+            _data: PhantomData,
         }
     }
 
@@ -57,36 +57,30 @@ where
     }
 }
 
-#[allow(dead_code)]
 pub enum StorageType {
     Instance,
     Persistent,
     Temporary,
 }
 
-pub trait StorageTypeInfo {
-    fn get_storage_type() -> StorageType;
-}
-
-pub trait StorageData<T> {
+pub trait StorageOps<T> {
     fn load(&self, env: &Env) -> Option<T>;
     fn save(&self, env: &Env, data: &T);
     fn delete(&self, env: &Env);
     fn has(&self, env: &Env) -> bool;
     fn bump(&self, env: &Env, low_expiration_watermark: u64, hi_expiration_watermark: u64);
-    fn get_storage_type(env: &Env) -> StorageType;
+    fn get_type(env: &Env) -> StorageType;
 }
 
 #[macro_export]
-macro_rules! impl_storage_data {
+macro_rules! impl_soroban_storage_data {
     ($data_type:ty, $storage_func:expr) => {
-        impl<K> $crate::StorageData<$data_type> for $crate::KeyedData<K, $data_type>
+        impl<'a, K> $crate::StorageOps<$data_type> for $crate::StorageProxy<'a, K, $data_type>
         where
             K: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>
-                + soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val>
-                + Clone,
+                + soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val>,
         {
-            fn get_storage_type(env: &soroban_sdk::Env) -> $crate::StorageType {
+            fn get_type(env: &soroban_sdk::Env) -> $crate::StorageType {
                 $storage_func(env, |storage_type, _storage| storage_type)
             }
 
@@ -115,7 +109,7 @@ macro_rules! impl_storage_data {
                 low_expiration_watermark: u64,
                 hi_expiration_watermark: u64,
             ) {
-                match Self::get_storage_type(&env) {
+                match Self::get_type(&env) {
                     $crate::StorageType::Instance => {
                         $crate::with_instance_storage(env, |_storage_type, storage| {
                             storage.bump(
@@ -149,69 +143,69 @@ macro_rules! impl_storage_data {
 }
 
 #[macro_export]
-macro_rules! impl_storage {
+macro_rules! impl_soroban_storage {
     ($data_type:ty, Instance) => {
-        $crate::impl_storage_data!($data_type, $crate::with_instance_storage);
+        $crate::impl_soroban_storage_data!($data_type, $crate::with_instance_storage);
     };
     ($data_type:ty, Persistent) => {
-        $crate::impl_storage_data!($data_type, $crate::with_persistent_storage);
+        $crate::impl_soroban_storage_data!($data_type, $crate::with_persistent_storage);
     };
     ($data_type:ty, Temporary) => {
-        $crate::impl_storage_data!($data_type, $crate::with_temporary_storage);
+        $crate::impl_soroban_storage_data!($data_type, $crate::with_temporary_storage);
     };
 }
 
-pub fn load_data<T, K>(env: &Env, key: &K) -> T
+pub fn load_data<'a, K, T>(env: &Env, key: &'a K) -> T
 where
-    KeyedData<K, T>: StorageData<T>,
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone + ?Sized,
+    StorageProxy<'a, K, T>: StorageOps<T>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
 {
-    KeyedData::<K, T>::new(key.clone()).load(env).unwrap()
+    StorageProxy::<'a, K, T>::new(key).load(env).unwrap()
 }
 
-pub fn load_data_or_else<T, K, F, R>(env: &Env, key: &K, handler: F) -> R
+pub fn load_data_or_else<'a, K, T, F, R>(env: &Env, key: &'a K, handler: F) -> R
 where
-    KeyedData<K, T>: StorageData<T>,
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone + ?Sized,
+    StorageProxy<'a, K, T>: StorageOps<T>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
     F: FnOnce(Option<T>) -> R,
 {
-    handler(KeyedData::<K, T>::new(key.clone()).load(env))
+    handler(StorageProxy::<'a, K, T>::new(key).load(env))
 }
 
-pub fn save_data<T, K>(env: &Env, key: &K, data: &T)
+pub fn save_data<'a, K, T>(env: &Env, key: &'a K, data: &T)
 where
-    KeyedData<K, T>: StorageData<T>,
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone + ?Sized,
+    StorageProxy<'a, K, T>: StorageOps<T>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
 {
-    KeyedData::<K, T>::new(key.clone()).save(env, data);
+    StorageProxy::<'a, K, T>::new(key).save(env, data);
 }
 
-pub fn has_data<T, K>(env: &Env, key: &K) -> bool
+pub fn has_data<'a, K, T>(env: &Env, key: &'a K) -> bool
 where
-    KeyedData<K, T>: StorageData<T>,
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone + ?Sized,
+    StorageProxy<'a, K, T>: StorageOps<T>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
 {
-    KeyedData::<K, T>::new(key.clone()).has(env)
+    StorageProxy::<'a, K, T>::new(key).has(env)
 }
 
-pub fn delete_data<T, K>(env: &Env, key: &K)
+pub fn delete_data<'a, K, T>(env: &Env, key: &'a K)
 where
-    KeyedData<K, T>: StorageData<T>,
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone + ?Sized,
+    StorageProxy<'a, K, T>: StorageOps<T>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
 {
-    KeyedData::<K, T>::new(key.clone()).delete(env);
+    StorageProxy::<'a, K, T>::new(key).delete(env);
 }
 
-pub fn bump_data<T, K>(
+pub fn bump_data<'a, K, T>(
     env: &Env,
-    key: &K,
+    key: &'a K,
     low_expiration_watermark: u64,
     hi_expiration_watermark: u64,
 ) where
-    KeyedData<K, T>: StorageData<T>,
-    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + Clone + ?Sized,
+    StorageProxy<'a, K, T>: StorageOps<T>,
+    K: IntoVal<Env, Val> + TryFromVal<Env, Val> + ?Sized,
 {
-    KeyedData::<K, T>::new(key.clone()).bump(
+    StorageProxy::<'a, K, T>::new(key).bump(
         env,
         low_expiration_watermark,
         hi_expiration_watermark,

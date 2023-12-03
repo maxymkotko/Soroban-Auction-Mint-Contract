@@ -14,7 +14,7 @@ pub struct DescendingPriceAuction;
 // DescendingPriceAuction (aka Dutch Auction).
 impl super::behavior::BaseAuction for DescendingPriceAuction {
     fn resolve(&self, env: &Env, seller: &Address) -> bool {
-        let auction_data = load_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()));
+        let auction_data = load_data::<DataKey, AuctionData>(env, &DataKey::AuctionData(seller.clone()));
 
         // Auction has expired.
         if auction_data.start_time + auction_data.duration < env.ledger().timestamp() {
@@ -33,7 +33,7 @@ impl super::behavior::BaseAuction for DescendingPriceAuction {
     }
 
     fn calculate_price(&self, env: &Env, seller: &Address) -> i128 {
-        let auction_data = load_data::<AuctionData, DataKey>(env, &DataKey::AuctionData(seller.clone()));
+        let auction_data = load_data::<DataKey, AuctionData>(env, &DataKey::AuctionData(seller.clone()));
 
         // Sanity checks.
         if auction_data.discount_percent == 0 || auction_data.discount_frequency == 0 {

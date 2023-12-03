@@ -6,7 +6,7 @@
     MIT License
 */
 
-use crate::{impl_storage, storage::*, types::AuctionData, AuctionContract, AuctionContractClient};
+use crate::{impl_soroban_storage, storage::*, types::AuctionData, AuctionContract, AuctionContractClient};
 extern crate std;
 
 use core::panic::AssertUnwindSafe;
@@ -381,20 +381,20 @@ pub struct TestContract;
 #[contractimpl]
 impl TestContract {
     pub fn run(env: Env) {
-        #[derive(Clone, Debug)]
         #[contracttype]
+        #[derive(Clone, Debug, Eq, PartialEq)]
         pub enum TestDataKey {
             AdminData,
             AuctionData(Address),
         }
 
         #[contracttype]
-        #[derive(Clone, Eq, PartialEq, Debug)]
+        #[derive(Clone, Debug, Eq, PartialEq)]
         pub struct TestAdminData {
             pub address: Address,
         }
 
-        impl_storage!(TestAdminData, Instance);
+        impl_soroban_storage!(TestAdminData, Instance);
 
         let key = TestDataKey::AdminData;
         let data = TestAdminData {
@@ -402,23 +402,15 @@ impl TestContract {
         };
 
         // Test generic functions.
-        save_data::<TestAdminData, TestDataKey>(&env, &key, &data);
-        assert_eq!(has_data::<TestAdminData, TestDataKey>(&env, &key), true);
-        bump_data::<TestAdminData, TestDataKey>(&env, &key, 1, 1);
-        delete_data::<TestAdminData, TestDataKey>(&env, &key);
-        assert_eq!(has_data::<TestAdminData, TestDataKey>(&env, &key), false);
+        save_data::<TestDataKey, TestAdminData>(&env, &key, &data);
+        assert_eq!(has_data::<TestDataKey, TestAdminData>(&env, &key), true);
+        bump_data::<TestDataKey, TestAdminData>(&env, &key, 1, 1);
+        delete_data::<TestDataKey, TestAdminData>(&env, &key);
+        assert_eq!(has_data::<TestDataKey, TestAdminData>(&env, &key), false);
 
-        save_data::<TestAdminData, TestDataKey>(&env, &key, &data);
-        assert_eq!(load_data::<TestAdminData, TestDataKey>(&env, &key), data);
-        assert_eq!(load_data_or_else::<TestAdminData, TestDataKey, _, _>(&env, &key, |opt| opt.unwrap()), data);
-
-        // Test instance.
-        data.save(&env, &key);
-        assert_eq!(data.has(&env, &key), true);
-        data.bump(&env, &key, 1, 1);
-        data.delete(&env, &key);
-        assert_eq!(data.has(&env, &key), false);
-
+        save_data::<TestDataKey, TestAdminData>(&env, &key, &data);
+        assert_eq!(load_data::<TestDataKey, TestAdminData>(&env, &key), data);
+        assert_eq!(load_data_or_else::<TestDataKey, TestAdminData, _, _>(&env, &key, |opt| opt.unwrap()), data);
     }
 }
 
