@@ -40,7 +40,7 @@ This contract implements a range of features, including:
 
 ### Prerequisites
 
-* Rust and Soroban
+* Rust min 1.71 and Soroban
 
   Set up your environment for smart contract development with Soroban on Rust by following the instructions provided in the link below:
   [https://soroban.stellar.org/docs/getting-started/setup](https://soroban.stellar.org/docs/getting-started/setup)
