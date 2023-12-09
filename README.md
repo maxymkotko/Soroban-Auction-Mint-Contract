@@ -41,6 +41,10 @@ This contract implements a range of features, including:
 ### Prerequisites
 
 * Rust min 1.71 and Soroban
+* upodate Rust for Mac
+*  ```sh
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   ``` 
 
   Set up your environment for smart contract development with Soroban on Rust by following the instructions provided in the link below:
   [https://soroban.stellar.org/docs/getting-started/setup](https://soroban.stellar.org/docs/getting-started/setup)
