@@ -41,7 +41,7 @@ This contract implements a range of features, including:
 ### Prerequisites
 
 * Rust min 1.71 and Soroban
-* upodate Rust for Mac
+* Update Rust for macOS, Linux, or another Unix-like OS
 *  ```sh
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
    ``` 
