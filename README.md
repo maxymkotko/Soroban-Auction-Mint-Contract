@@ -51,11 +51,16 @@ This contract implements a range of features, including:
    ```sh
    git clone https://github.com/FredericRezeau/litemint-auction-contract.git
    ```
-2. Running Tests:
+2. cd into reop, if you opended in VC editor go striaght to step 3 if not find repo in your path.
+  ```sh
+   Yoursysuser $ or % //yourpath/eg.desktop/yourgituserifforked/litemint-auction-contract.git
+   ```
+
+3. Running Tests:
    ```sh
    cargo test -- --nocapture
    ```
-3. Building the Contract:
+4. Building the Contract:
    ```sh
    cargo build --target wasm32-unknown-unknown --release
    ```
