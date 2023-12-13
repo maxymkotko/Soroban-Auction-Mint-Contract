@@ -49,26 +49,6 @@ This contract implements a range of features, including:
   Set up your environment for smart contract development with Soroban on Rust by following the instructions provided in the link below:
   [https://soroban.stellar.org/docs/getting-started/setup](https://soroban.stellar.org/docs/getting-started/setup)
 
-### Running tests and building
-
-1. Cloning the Repository:
-   ```sh
-   git clone https://github.com/FredericRezeau/litemint-auction-contract.git
-   ```
-2. cd into reop, if you opended in VC editor go striaght to step 3 if not find repo in your path.
-  ```sh
-   Yoursysuser $ or % //yourpath/eg.desktop/yourgituserifforked/litemint-auction-contract.git
-   ```
-
-3. Running Tests:
-   ```sh
-   cargo test -- --nocapture
-   ```
-4. Building the Contract:
-   ```sh
-   cargo build --target wasm32-unknown-unknown --release
-   ```
-
 <!-- CONTRIBUTING -->
 ## Contributing
 
@@ -87,25 +67,9 @@ Don't forget to give the project a star! Thanks again!
 
 Distributed under the MIT License. See `LICENSE` for more information.
 
-
-
 <!-- CONTACT -->
 ## Contact
-
-Fred Kyung-jin Rezeau - [@FredericRezeau](https://twitter.com/fredericrezeau)
 
 Litemint Marketplace: [https://litemint.com](https://litemint.com)
 
 Join our discord server: [https://litemint.gg](https://litemint.gg)
-
-
-<!-- MARKDOWN LINKS & IMAGES -->
-[license-shield]: https://img.shields.io/github/license/FredericRezeau/soroban-snooker.svg?style=for-the-badge
-[license-url]: https://github.com/FredericRezeau/soroban-snooker/blob/master/LICENSE
-[twitter-shield]: https://img.shields.io/badge/-Twitter-black.svg?style=for-the-badge&logo=twitter&colorB=555
-[twitter-url]: https://twitter.com/fredericrezeau
-
-[rust-shield]: https://img.shields.io/badge/Rust-000000?style=flat-square&logo=Rust&logoColor=white
-[rust-url]: https://www.rust-lang.org
-[javascript-shield]: https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black
-[javascript-url]: https://vanilla-js.com
